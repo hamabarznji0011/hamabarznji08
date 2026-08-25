@@ -106,25 +106,12 @@ function AuthPage() {
             </button>
           </form>
 
-          {savedAccount && (
-            <button
-              type="button"
-              onClick={() => {
-                useAppLoginSaved();
-              }}
-              className="hidden"
-            />
-          )}
         </div>
 
         {savedAccount && <SavedAccountButton />}
       </div>
     </main>
   );
-}
-
-function useAppLoginSaved() {
-  /* placeholder to keep hook rules clear */
 }
 
 function SavedAccountButton() {
