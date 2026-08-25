@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as AppFriendsRouteImport } from './routes/app.friends'
+import { Route as AppPlayRouteImport } from './routes/app.play'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +25,16 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppFriendsRoute = AppFriendsRouteImport.update({
+  id: '/friends',
+  path: '/friends',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPlayRoute = AppPlayRouteImport.update({
+  id: '/play',
+  path: '/play',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -32,25 +44,31 @@ const AppProfileRoute = AppProfileRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/friends': typeof AppFriendsRoute
+  '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/friends': typeof AppFriendsRoute
+  '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/friends': typeof AppFriendsRoute
+  '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/profile'
+  fullPaths: '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/app/profile'
-  id: '__root__' | '/' | '/app' | '/app/profile'
+  to: '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
+  id: '__root__' | '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -74,6 +92,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/friends': {
+      id: '/app/friends'
+      path: '/friends'
+      fullPath: '/app/friends'
+      preLoaderRoute: typeof AppFriendsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/play': {
+      id: '/app/play'
+      path: '/play'
+      fullPath: '/app/play'
+      preLoaderRoute: typeof AppPlayRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/profile': {
       id: '/app/profile'
       path: '/profile'
@@ -85,10 +117,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppFriendsRoute: typeof AppFriendsRoute
+  AppPlayRoute: typeof AppPlayRoute
   AppProfileRoute: typeof AppProfileRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppFriendsRoute: AppFriendsRoute,
+  AppPlayRoute: AppPlayRoute,
   AppProfileRoute: AppProfileRoute,
 }
 
