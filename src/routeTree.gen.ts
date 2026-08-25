@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AppFriendsRouteImport } from './routes/app.friends'
+import { Route as AppLeaderboardsRouteImport } from './routes/app.leaderboards'
 import { Route as AppPlayRouteImport } from './routes/app.play'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
+import { Route as AppStoreRouteImport } from './routes/app.store'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +32,11 @@ const AppFriendsRoute = AppFriendsRouteImport.update({
   path: '/friends',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLeaderboardsRoute = AppLeaderboardsRouteImport.update({
+  id: '/leaderboards',
+  path: '/leaderboards',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPlayRoute = AppPlayRouteImport.update({
   id: '/play',
   path: '/play',
@@ -40,35 +47,68 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppStoreRoute = AppStoreRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/friends': typeof AppFriendsRoute
+  '/app/leaderboards': typeof AppLeaderboardsRoute
   '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/store': typeof AppStoreRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/friends': typeof AppFriendsRoute
+  '/app/leaderboards': typeof AppLeaderboardsRoute
   '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/store': typeof AppStoreRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/friends': typeof AppFriendsRoute
+  '/app/leaderboards': typeof AppLeaderboardsRoute
   '/app/play': typeof AppPlayRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/store': typeof AppStoreRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/friends'
+    | '/app/leaderboards'
+    | '/app/play'
+    | '/app/profile'
+    | '/app/store'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
-  id: '__root__' | '/' | '/app' | '/app/friends' | '/app/play' | '/app/profile'
+  to:
+    | '/'
+    | '/app'
+    | '/app/friends'
+    | '/app/leaderboards'
+    | '/app/play'
+    | '/app/profile'
+    | '/app/store'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/friends'
+    | '/app/leaderboards'
+    | '/app/play'
+    | '/app/profile'
+    | '/app/store'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -99,6 +139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFriendsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/leaderboards': {
+      id: '/app/leaderboards'
+      path: '/leaderboards'
+      fullPath: '/app/leaderboards'
+      preLoaderRoute: typeof AppLeaderboardsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/play': {
       id: '/app/play'
       path: '/play'
@@ -113,19 +160,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/store': {
+      id: '/app/store'
+      path: '/store'
+      fullPath: '/app/store'
+      preLoaderRoute: typeof AppStoreRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppFriendsRoute: typeof AppFriendsRoute
+  AppLeaderboardsRoute: typeof AppLeaderboardsRoute
   AppPlayRoute: typeof AppPlayRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppStoreRoute: typeof AppStoreRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppFriendsRoute: AppFriendsRoute,
+  AppLeaderboardsRoute: AppLeaderboardsRoute,
   AppPlayRoute: AppPlayRoute,
   AppProfileRoute: AppProfileRoute,
+  AppStoreRoute: AppStoreRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Ban, Check, Copy, LogOut, Plus, Send, Users } from "lucide-react";
 import { toast } from "sonner";
 import { formatTime, useApp, type Friend, type Group } from "@/lib/app-store";
@@ -320,7 +320,10 @@ function Composer({ onSend }: { onSend: (text: string) => void }) {
 function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }) {
   const { directMessages, sendDirect, markRead } = useApp();
   useHideChrome();
-  useMemo(() => markRead(friend.id), [friend.id, markRead]);
+  useEffect(() => {
+    markRead(friend.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friend.id]);
   const messages = directMessages[friend.id] ?? [];
 
   return (
