@@ -44,3 +44,6 @@ export const goldPackages = [
   { id: "p4", gold: 1100, price: "7.99" },
   { id: "p5", gold: 1800, price: "9.99" },
 ];
+
+export const tokenById = (id: string): TokenSkin => tokens.find((t) => t.id === id) ?? tokens[0]!;
+export const boardById = (id: string): BoardSkin => boards.find((b) => b.id === id) ?? boards[0]!;

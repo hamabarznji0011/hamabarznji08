@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, Dices } from "lucide-react";
-import { boards, tokens } from "@/lib/game-data";
+import { boardById, boards, tokenById, tokens } from "@/lib/game-data";
 import { BoardArt, TokenArt } from "@/components/skins";
 import { useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
@@ -23,8 +23,8 @@ function PlayTab() {
   const [overlay, setOverlay] = useState<"token" | "board" | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  const token = tokens.find((t) => t.id === tokenId) ?? tokens[0];
-  const board = boards.find((b) => b.id === boardId) ?? boards[0];
+  const token = tokenById(tokenId);
+  const board = boardById(boardId);
 
   return (
     <section className="min-h-screen px-4 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] pb-32">
@@ -142,8 +142,8 @@ function BoardPicker({ onClose }: { onClose: () => void }) {
 
 function Gameplay({ onClose }: { onClose: () => void }) {
   const { tokenId, boardId } = useApp();
-  const token = tokens.find((t) => t.id === tokenId) ?? tokens[0];
-  const board = boards.find((b) => b.id === boardId) ?? boards[0];
+  const token = tokenById(tokenId);
+  const board = boardById(boardId);
   const [pos, setPos] = useState(1);
   const [dice, setDice] = useState(1);
   useHideChrome();

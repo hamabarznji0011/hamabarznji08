@@ -299,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               name,
               code: String(Math.floor(100000 + Math.random() * 900000)),
               memberIds: memberIds.slice(0, 4),
-              color: ["violet", "cyan", "amber", "rose"][p.groups.length % 4],
+              color: ["violet", "cyan", "amber", "rose"][p.groups.length % 4] ?? "violet",
             },
           ],
         })),

@@ -181,14 +181,16 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   useHideChrome();
 
-  const toggle = (id: string) =>
-    setSelected((prev) =>
-      prev.includes(id)
-        ? prev.filter((x) => x !== id)
-        : prev.length >= 4
-          ? (toast.error("زۆرترین ٤ ئەندام"), prev)
-          : [...prev, id],
-    );
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 4) {
+        toast.error("زۆرترین ٤ ئەندام");
+        return prev;
+      }
+      return [...prev, id];
+    });
+  };
 
   return (
     <div className="glass-strong animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
@@ -254,7 +256,7 @@ function ChatBubble({
   mine: boolean;
   text: string;
   at: number;
-  author?: string;
+  author?: string | undefined;
   accent?: boolean;
 }) {
   const codeMatch = /^\d{6}$/.test(text.trim());
