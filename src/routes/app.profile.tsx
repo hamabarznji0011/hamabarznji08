@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, LogOut, Menu, ShieldBan, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/app-store";
-import { useChrome } from "@/components/chrome";
+import { useHideChrome } from "@/components/chrome";
 
 export const Route = createFileRoute("/app/profile")({
   head: () => ({
@@ -63,11 +63,10 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
   const { online, setOnline, logout, blockedFriends, unblockFriend } = useApp();
-  const { setHidden } = useChrome();
   const navigate = useNavigate();
   const [showBlocked, setShowBlocked] = useState(false);
 
-  useHide(setHidden);
+  useHideChrome();
 
   return (
     <div className="glass-strong animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
@@ -139,14 +138,3 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
-function useHide(setHidden: (v: boolean) => void) {
-  useMount(() => {
-    setHidden(true);
-    return () => setHidden(false);
-  });
-}
-
-import { useEffect } from "react";
-function useMount(fn: () => () => void) {
-  useEffect(fn, []);
-}
