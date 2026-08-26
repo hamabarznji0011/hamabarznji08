@@ -205,11 +205,15 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
         <h2 className="text-lg font-bold text-panel-foreground">گروپی نوێ</h2>
         <button
           onClick={() => {
-            if (selected.length === 0) return toast.error("هاوڕێ هەڵبژێرە");
+            if (selected.length === 0) {
+              toast.error("هاوڕێ هەڵبژێرە");
+              return;
+            }
             createGroup(name.trim() || "گروپی نوێ", selected);
             toast.success("گروپ دروستکرا");
             onClose();
           }}
+
           aria-label="پشتڕاستکردنەوە"
           className="press flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground"
         >
