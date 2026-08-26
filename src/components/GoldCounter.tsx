@@ -1,6 +1,6 @@
-import { Coins } from "lucide-react";
 import { useApp } from "@/lib/app-store";
 import { useChrome } from "@/components/chrome";
+import { GoldBar } from "@/components/GoldBar";
 
 export function GoldCounter() {
   const { gold } = useApp();
@@ -11,8 +11,8 @@ export function GoldCounter() {
   return (
     <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-4 z-40 animate-soft-in">
       <div className="glass-strong flex items-center gap-2 rounded-full py-1.5 pr-3 pl-1.5">
-        <span className="gold-surface flex size-9 items-center justify-center rounded-full">
-          <Coins className="size-5 text-accent-foreground" strokeWidth={2.2} />
+        <span className="flex size-10 items-center justify-center rounded-full bg-black/30">
+          <GoldBar className="w-8" />
         </span>
         <span className="min-w-8 text-sm font-bold tabular-nums text-gold">{gold}</span>
       </div>
@@ -22,11 +22,9 @@ export function GoldCounter() {
 
 export function GoldPill({ amount }: { amount: number }) {
   return (
-    <div className="glass flex items-center gap-2 rounded-full py-1 pr-3 pl-1">
-      <span className="gold-surface flex size-8 items-center justify-center rounded-full">
-        <Coins className="size-4 text-accent-foreground" strokeWidth={2.2} />
-      </span>
-      <span className="text-sm font-bold tabular-nums text-gold">{amount}</span>
+    <div className="flex items-center gap-2 rounded-full border border-panel-border bg-panel-foreground/5 py-1 pr-3 pl-1.5">
+      <GoldBar className="w-9" />
+      <span className="text-sm font-bold tabular-nums text-panel-foreground">{amount}</span>
     </div>
   );
 }
