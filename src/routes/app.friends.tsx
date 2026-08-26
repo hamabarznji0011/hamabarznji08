@@ -193,16 +193,16 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="glass-strong animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
       <div className="flex items-center justify-between">
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
-          className="glass press flex size-11 items-center justify-center rounded-full"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
         >
           <ArrowRight className="size-5" />
         </button>
-        <h2 className="text-lg font-bold">گروپی نوێ</h2>
+        <h2 className="text-lg font-bold text-panel-foreground">گروپی نوێ</h2>
         <button
           onClick={() => {
             if (selected.length === 0) return toast.error("هاوڕێ هەڵبژێرە");
@@ -221,7 +221,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="ناوی گروپ"
-        className="mt-5 w-full rounded-2xl border border-border bg-input px-4 py-3 text-sm outline-none focus:border-primary"
+        className="mt-5 w-full rounded-2xl border border-panel-border bg-panel-foreground/5 px-4 py-3 text-sm text-panel-foreground outline-none placeholder:text-panel-muted focus:border-primary"
       />
 
       <div className="mt-4 flex-1 space-y-3 overflow-y-auto no-scrollbar">
@@ -232,7 +232,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
               key={f.id}
               onClick={() => toggle(f.id)}
               className={`press flex w-full items-center gap-3 rounded-2xl border p-3 transition-all ${
-                on ? "border-primary bg-primary/15" : "border-border bg-input"
+                on ? "border-primary bg-primary/15 text-panel-foreground" : "border-panel-border bg-panel-foreground/5 text-panel-foreground"
               }`}
             >
               <img src={f.avatar} alt={f.name} className="size-11 rounded-full bg-secondary" />
@@ -264,14 +264,14 @@ function ChatBubble({
 
   return (
     <div className={`flex flex-col ${mine ? "items-start" : "items-end"}`}>
-      {author && <span className="mb-0.5 text-[10px] text-muted-foreground">{author}</span>}
+      {author && <span className="mb-0.5 text-[10px] text-panel-muted">{author}</span>}
       <div
         className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${
           mine
             ? "bg-primary text-primary-foreground"
             : accent
-              ? "bg-accent/25 text-foreground"
-              : "glass text-foreground"
+              ? "bg-accent/25 text-panel-foreground"
+              : "bg-panel-foreground/5 text-panel-foreground"
         }`}
       >
         {codeMatch ? (
@@ -288,7 +288,7 @@ function ChatBubble({
           text
         )}
       </div>
-      <span className="mt-1 text-[10px] text-muted-foreground">{formatTime(at)}</span>
+      <span className="mt-1 text-[10px] text-panel-muted">{formatTime(at)}</span>
     </div>
   );
 }
@@ -301,7 +301,7 @@ function Composer({ onSend }: { onSend: (text: string) => void }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="نامەیەک بنووسە..."
-        className="flex-1 rounded-2xl border border-border bg-input px-4 py-3 text-sm outline-none focus:border-primary"
+        className="flex-1 rounded-2xl border border-panel-border bg-panel-foreground/5 px-4 py-3 text-sm text-panel-foreground outline-none placeholder:text-panel-muted focus:border-primary"
       />
       {text.trim() && (
         <button
@@ -329,16 +329,16 @@ function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }
   const messages = directMessages[friend.id] ?? [];
 
   return (
-    <div className="glass-strong animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between pb-3">
         <div className="flex items-center gap-3">
           <img src={friend.avatar} alt={friend.name} className="size-10 rounded-full bg-secondary" />
-          <span className="font-bold">{friend.name}</span>
+          <span className="font-bold text-panel-foreground">{friend.name}</span>
         </div>
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
-          className="glass press flex size-11 items-center justify-center rounded-full"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
         >
           <ArrowRight className="size-5" />
         </button>
@@ -362,20 +362,20 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
   const nameOf = (id: string) => friends.find((f) => f.id === id)?.name ?? "ئەندام";
 
   return (
-    <div className="animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col bg-accent/10 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-2xl">
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between pb-3">
         <div className="flex items-center gap-3">
           <span className="flex size-10 items-center justify-center rounded-full bg-accent/30">
             <Users className="size-5 text-accent" />
           </span>
           <div>
-            <p className="font-bold">{group.name}</p>
+            <p className="font-bold text-panel-foreground">{group.name}</p>
             <button
               onClick={() => {
                 navigator.clipboard?.writeText(group.code);
                 toast.success("کۆدەکە کۆپی کرا");
               }}
-              className="text-xs font-bold text-emerald-glow"
+              className="text-xs font-bold text-emerald-700"
             >
               {group.code}
             </button>
@@ -384,7 +384,7 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
-          className="glass press flex size-11 items-center justify-center rounded-full"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
         >
           <ArrowRight className="size-5" />
         </button>

@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Coins } from "lucide-react";
 import { toast } from "sonner";
 import { goldPackages } from "@/lib/game-data";
 import { useApp } from "@/lib/app-store";
+import { GoldBar } from "@/components/GoldBar";
 
 export const Route = createFileRoute("/app/store")({
   head: () => ({
@@ -58,9 +58,7 @@ function StoreTab() {
             className="press animate-rise-in flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-xl"
           >
             <span className="flex items-center gap-3">
-              <span className="gold-surface flex size-11 items-center justify-center rounded-full">
-                <Coins className="size-5 text-accent-foreground" />
-              </span>
+              <GoldBar className="w-12" />
               <span className="text-lg font-extrabold tabular-nums text-gold">{p.gold} زێڕ</span>
             </span>
             <span className="rounded-xl bg-white/10 px-4 py-2 text-base font-bold text-foreground">
