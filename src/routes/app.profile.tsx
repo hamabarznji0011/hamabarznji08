@@ -69,12 +69,12 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   useHideChrome();
 
   return (
-    <div className="glass-strong animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
       <div className="flex items-center justify-between">
         <button
           onClick={() => (showBlocked ? setShowBlocked(false) : onClose())}
           aria-label="گەڕانەوە"
-          className="glass press flex size-11 items-center justify-center rounded-full"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
         >
           <ArrowRight className="size-5" />
         </button>
@@ -85,10 +85,10 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
       {showBlocked ? (
         <div className="mt-6 space-y-3">
           {blockedFriends.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground">کەس بلۆک نەکراوە</p>
+            <p className="text-center text-sm text-panel-muted">کەس بلۆک نەکراوە</p>
           )}
           {blockedFriends.map((f) => (
-            <div key={f.id} className="glass flex items-center justify-between rounded-2xl p-3">
+            <div key={f.id} className="flex items-center justify-between rounded-2xl border border-panel-border bg-panel-foreground/5 p-3">
               <span className="font-semibold">{f.name}</span>
               <button
                 onClick={() => unblockFriend(f.id)}
@@ -104,7 +104,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
         <div className="mt-8 space-y-3">
           <button
             onClick={() => setShowBlocked(true)}
-            className="glass press flex w-full items-center gap-3 rounded-2xl p-4 text-foreground"
+            className="press flex w-full items-center gap-3 rounded-2xl border border-panel-border bg-panel-foreground/5 p-4 text-panel-foreground"
           >
             <ShieldBan className="size-5" />
             <span className="font-semibold">لیستی بلۆککراوەکان</span>
@@ -112,7 +112,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={() => setOnline(!online)}
-            className="glass press flex w-full items-center justify-between rounded-2xl p-4"
+            className="press flex w-full items-center justify-between rounded-2xl border border-panel-border bg-panel-foreground/5 p-4 text-panel-foreground"
           >
             <span className="font-semibold">{online ? "سەرهێڵ" : "دەرهێڵ"}</span>
             <span
@@ -127,7 +127,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
               logout();
               navigate({ to: "/" });
             }}
-            className="glass press flex w-full items-center gap-3 rounded-2xl p-4 text-destructive"
+            className="press flex w-full items-center gap-3 rounded-2xl border border-panel-border bg-destructive/10 p-4 text-destructive"
           >
             <LogOut className="size-5" />
             <span className="font-semibold">دەرچوون</span>

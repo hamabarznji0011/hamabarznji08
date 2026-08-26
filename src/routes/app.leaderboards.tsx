@@ -81,11 +81,11 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
     <div className="fixed inset-0 z-50 flex items-end bg-background/60" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="glass-strong animate-sheet-up mx-auto h-1/2 w-full max-w-md rounded-t-3xl p-5"
+        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
       >
         <div className="flex items-start justify-between">
           <GoldPill amount={player.gold} />
-          <div className="h-1.5 w-12 rounded-full bg-border" />
+          <div className="h-1.5 w-12 rounded-full bg-panel-border" />
           <span className="w-20" />
         </div>
 
@@ -93,9 +93,9 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
           <img
             src={player.avatar}
             alt={player.name}
-            className="size-20 rounded-full border-2 border-primary/50 bg-secondary"
+            className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
           />
-          <h3 className="mt-2 text-xl font-extrabold">{player.name}</h3>
+          <h3 className="mt-2 text-xl font-extrabold text-panel-foreground">{player.name}</h3>
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-3">
@@ -110,9 +110,9 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
 
 function Cell({ label, value }: { label: string; value: number }) {
   return (
-    <div className="glass rounded-2xl p-3 text-center">
-      <p className="text-xl font-extrabold tabular-nums text-primary">{value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{label}</p>
+    <div className="rounded-2xl border border-panel-border bg-panel-foreground/5 p-3 text-center">
+      <p className="text-xl font-extrabold tabular-nums text-panel-foreground">{value}</p>
+      <p className="mt-1 text-[11px] text-panel-muted">{label}</p>
     </div>
   );
 }

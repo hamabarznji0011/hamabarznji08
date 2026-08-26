@@ -34,6 +34,10 @@
   --color-gold-deep: var(--gold-deep);
   --color-emerald-glow: var(--emerald-glow);
   --color-store: var(--store);
+  --color-panel: var(--panel);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-muted: var(--panel-muted);
+  --color-panel-border: var(--panel-border);
   --font-sans: var(--font-kurdish);
 }
 
@@ -64,7 +68,11 @@
   --gold: oklch(0.83 0.16 85);
   --gold-deep: oklch(0.63 0.14 70);
   --emerald-glow: oklch(0.78 0.2 155);
-  --store: oklch(0.42 0.19 25);
+  --store: oklch(0.55 0.24 27);
+  --panel: oklch(1 0 0);
+  --panel-foreground: oklch(0.18 0.02 260);
+  --panel-muted: oklch(0.5 0.02 260);
+  --panel-border: oklch(0.9 0.01 260);
 
   --glass-bg: oklch(1 0 0 / 8%);
   --glass-bg-strong: oklch(1 0 0 / 14%);
@@ -96,7 +104,6 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
   box-shadow: var(--shadow-glass);
 }
 
@@ -104,7 +111,6 @@
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(34px) saturate(160%);
-  -webkit-backdrop-filter: blur(34px) saturate(160%);
   box-shadow: var(--shadow-glass);
 }
 
@@ -195,4 +201,56 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+@utility panel {
+  background: var(--panel);
+  color: var(--panel-foreground);
+  border-color: var(--panel-border);
+}
+
+@keyframes glide-right {
+  0% {
+    transform: translate3d(-45%, 0, 0) scale(1) rotate(-3deg);
+  }
+  50% {
+    transform: translate3d(45%, 6%, 0) scale(1.12) rotate(3deg);
+  }
+  100% {
+    transform: translate3d(-45%, 0, 0) scale(1) rotate(-3deg);
+  }
+}
+
+@keyframes glide-left {
+  0% {
+    transform: translate3d(50%, 0, 0) scaleX(-1) scale(1.05) rotate(2deg);
+  }
+  50% {
+    transform: translate3d(-50%, -8%, 0) scaleX(-1) scale(0.92) rotate(-2deg);
+  }
+  100% {
+    transform: translate3d(50%, 0, 0) scaleX(-1) scale(1.05) rotate(2deg);
+  }
+}
+
+@keyframes slither {
+  0%,
+  100% {
+    transform: skewY(-2deg) translateY(0);
+  }
+  50% {
+    transform: skewY(2deg) translateY(-1.5%);
+  }
+}
+
+@utility animate-glide-right {
+  animation: glide-right 26s ease-in-out infinite;
+}
+
+@utility animate-glide-left {
+  animation: glide-left 34s ease-in-out infinite;
+}
+
+@utility animate-slither {
+  animation: slither 5s ease-in-out infinite;
 }
