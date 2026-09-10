@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { globalPlayers, useApp, type Player } from "@/lib/app-store";
 import { GoldPill } from "@/components/GoldCounter";
 
@@ -23,16 +25,59 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "gold", label: "زۆرترین زێڕ" },
 ];
 
+const ROW = 68;
+
 function LeaderboardsTab() {
-  const { visibleFriends } = useApp();
+  const { visibleFriends, user, gold } = useApp();
   const [tab, setTab] = useState<Tab>("points");
   const [selected, setSelected] = useState<Player | null>(null);
+  const [drift, setDrift] = useState<Record<string, { points: number; gold: number }>>({});
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setDrift((prev) => {
+        const next = { ...prev };
+        const pool = [...globalPlayers.map((p) => p.id), "me"];
+        for (let i = 0; i < 3; i++) {
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          if (!pick) continue;
+          const cur = next[pick] ?? { points: 0, gold: 0 };
+          next[pick] = {
+            points: cur.points + Math.floor(Math.random() * 160),
+            gold: cur.gold + Math.floor(Math.random() * 90),
+          };
+        }
+        return next;
+      });
+    }, 2600);
+    return () => clearInterval(id);
+  }, []);
+
+  const me: Player = useMemo(
+    () => ({
+      id: "me",
+      name: user?.name ?? "تۆ",
+      avatar: user?.avatar ?? "",
+      points: user?.points ?? 0,
+      gold,
+      games: user?.games ?? 0,
+      wins: user?.wins ?? 0,
+    }),
+    [user, gold],
+  );
 
   const rows = useMemo(() => {
-    if (tab === "gold") return [...globalPlayers].sort((a, b) => b.gold - a.gold);
-    if (tab === "friends") return [...visibleFriends].sort((a, b) => b.points - a.points);
-    return [...globalPlayers].sort((a, b) => b.points - a.points);
-  }, [tab, visibleFriends]);
+    const live = (p: Player): Player => {
+      const d = drift[p.id];
+      return d ? { ...p, points: p.points + d.points, gold: p.gold + d.gold } : p;
+    };
+    const base =
+      tab === "friends" ? [...visibleFriends, me] : [...globalPlayers, me];
+    const list = base.map(live);
+    return tab === "gold"
+      ? list.sort((a, b) => b.gold - a.gold)
+      : list.sort((a, b) => b.points - a.points);
+  }, [tab, visibleFriends, me, drift]);
 
   return (
     <section className="min-h-screen px-4 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] pb-32">
@@ -52,19 +97,29 @@ function LeaderboardsTab() {
         ))}
       </div>
 
-      <div className="space-y-2">
+      <div className="relative" style={{ height: rows.length * ROW }}>
         {rows.map((p, i) => (
           <div
             key={p.id}
-            style={{ animationDelay: `${i * 40}ms` }}
-            className="glass animate-rise-in flex items-center gap-3 rounded-2xl p-3"
+            style={{ transform: `translateY(${i * ROW}px)` }}
+            className={`glass absolute inset-x-0 top-0 flex h-[60px] items-center gap-3 rounded-2xl p-3 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              p.id === "me" ? "border-primary/60 shadow-[var(--shadow-glow)]" : ""
+            }`}
           >
             <span className="w-6 text-center text-sm font-extrabold text-primary">{i + 1}</span>
-            <img src={p.avatar} alt={p.name} className="size-10 rounded-full bg-secondary" />
-            <button onClick={() => setSelected(p)} className="press flex-1 text-right font-bold">
+            {p.avatar ? (
+              <img src={p.avatar} alt={p.name} className="size-9 rounded-full bg-secondary" />
+            ) : (
+              <span className="size-9 rounded-full bg-secondary" />
+            )}
+            <button
+              onClick={() => setSelected(p)}
+              className="press flex-1 text-right font-bold"
+            >
               {p.name}
+              {p.id === "me" && <span className="mr-2 text-xs text-primary">(تۆ)</span>}
             </button>
-            <span className="text-sm font-bold tabular-nums text-gold">
+            <span className="text-sm font-bold tabular-nums text-gold transition-all duration-500">
               {tab === "gold" ? p.gold : p.points}
             </span>
           </div>
@@ -77,6 +132,9 @@ function LeaderboardsTab() {
 }
 
 function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void }) {
+  const { requestFriend } = useApp();
+  const isMe = player.id === "me";
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-background/60" onClick={onClose}>
       <div
@@ -85,23 +143,42 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
       >
         <div className="flex items-start justify-between">
           <GoldPill amount={player.gold} />
-          <div className="h-1.5 w-12 rounded-full bg-panel-border" />
-          <span className="w-20" />
+          <div className="mt-2 h-1.5 w-12 rounded-full bg-panel-border" />
+          {isMe ? (
+            <span className="w-11" />
+          ) : (
+            <button
+              onClick={() => {
+                const res = requestFriend(player);
+                toast[res === "added" ? "success" : "error"](
+                  res === "added" ? "داواکاری نێردرا" : "پێشتر هەیە",
+                );
+              }}
+              aria-label="زیادکردنی هاوڕێ"
+              className="press flex size-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30"
+            >
+              <UserPlus className="size-5" />
+            </button>
+          )}
         </div>
 
         <div className="mt-4 flex flex-col items-center">
-          <img
-            src={player.avatar}
-            alt={player.name}
-            className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
-          />
+          {player.avatar ? (
+            <img
+              src={player.avatar}
+              alt={player.name}
+              className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
+            />
+          ) : (
+            <span className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5" />
+          )}
           <h3 className="mt-2 text-xl font-extrabold text-panel-foreground">{player.name}</h3>
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-3">
           <Cell label="یارییەکان" value={player.games} />
-          <Cell label="بردنەوە" value={player.wins} />
           <Cell label="دۆڕان" value={player.games - player.wins} />
+          <Cell label="زێڕ" value={player.gold} />
         </div>
       </div>
     </div>
