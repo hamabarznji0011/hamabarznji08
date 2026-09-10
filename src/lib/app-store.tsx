@@ -116,6 +116,7 @@ const seedState = (): State => ({
   gold: 250,
   online: true,
   friends: seedFriends,
+  friendRequests: seedRequests,
   blockedIds: [],
   groups: [
     {
