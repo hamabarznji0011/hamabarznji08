@@ -134,12 +134,26 @@ function LeaderboardsTab() {
 function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void }) {
   const { requestFriend } = useApp();
   const isMe = player.id === "me";
+  const [zoomed, setZoomed] = useState(false);
+
+  useHideChrome();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-background/60" onClick={onClose}>
+      {zoomed && player.avatar && (
+        <div
+          className="animate-soft-in fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomed(false);
+          }}
+        >
+          <img src={player.avatar} alt={player.name} className="max-h-[80vh] w-[85%] max-w-md object-contain" />
+        </div>
+      )}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
+        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
       >
         <div className="flex items-start justify-between">
           <GoldPill amount={player.gold} />
