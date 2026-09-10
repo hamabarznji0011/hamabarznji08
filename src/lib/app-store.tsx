@@ -94,8 +94,15 @@ const seedFriends: Friend[] = [
   makeFriend("f6", "دەریا", 2240, 410, 77, 30),
 ];
 
+const seedRequests: Friend[] = [
+  makeFriend("r1", "ئارام", 3420, 760, 132, 70),
+  makeFriend("r2", "نەرمین", 2980, 1120, 118, 55),
+  makeFriend("r3", "زانا", 2510, 430, 88, 39),
+];
+
 export const globalPlayers: Player[] = [
   ...seedFriends,
+
   makeFriend("g1", "سۆران", 7120, 3050, 380, 244),
   makeFriend("g2", "ئەڤین", 6640, 4210, 355, 219),
   makeFriend("g3", "بەختیار", 6010, 1890, 300, 176),
