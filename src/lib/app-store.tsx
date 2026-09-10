@@ -58,6 +58,7 @@ type State = {
   gold: number;
   online: boolean;
   friends: Friend[];
+  friendRequests: Friend[];
   blockedIds: string[];
   groups: Group[];
   directMessages: Record<string, Message[]>;
