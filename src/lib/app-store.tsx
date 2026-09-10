@@ -174,6 +174,10 @@ type Ctx = State & {
   visibleFriends: Friend[];
   blockedFriends: Friend[];
   playerById: (id: string) => Player | undefined;
+  acceptRequest: (id: string) => void;
+  declineRequest: (id: string) => void;
+  requestFriend: (player: Player) => "added" | "exists";
+
 };
 
 const AppContext = createContext<Ctx | null>(null);
