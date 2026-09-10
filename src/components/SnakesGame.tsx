@@ -29,18 +29,18 @@ function BoardGrid({ board }: { board: BoardSkin }) {
       {rows.map((row) => {
         const cells = Array.from({ length: BOARD_SIZE }, (_, i) => {
           const idx = row % 2 === 0 ? i : BOARD_SIZE - 1 - i;
-          return row * BOARD_SIZE + idx + 1;
+          return { n: row * BOARD_SIZE + idx + 1, col: i };
         });
         return (
           <div key={row} className="flex flex-1">
-            {cells.map((n) => {
+            {cells.map(({ n, col }) => {
               const isLadder = LADDERS[n] !== undefined;
               const isSnake = SNAKES[n] !== undefined;
               return (
                 <div
                   key={n}
                   className="relative flex-1 border border-black/10"
-                  style={{ background: (n + row) % 2 === 0 ? mid : dark }}
+                  style={{ background: (col + row) % 2 === 0 ? mid : dark }}
                 >
                   <span
                     className="absolute left-[3px] top-[1px] text-[7px] font-bold leading-none"
