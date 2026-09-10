@@ -184,7 +184,7 @@ type Ctx = State & {
   requestFriend: (player: Player) => "added" | "exists";
   isNameTaken: (name: string) => boolean;
   nameCooldownDaysLeft: number;
-  updateProfile: (data: { name?: string; avatar?: string }) => void;
+  updateProfile: (data: { name?: string | undefined; avatar?: string | undefined }) => void;
   deleteAccount: () => void;
 };
 
