@@ -10,11 +10,11 @@ export function GoldCounter() {
 
   return (
     <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-4 z-40 animate-soft-in">
-      <div className="glass-strong flex items-center gap-2 rounded-full py-1.5 pr-3 pl-1.5">
-        <span className="flex size-10 items-center justify-center rounded-full bg-black/30">
-          <GoldBar className="w-8" />
+      <div className="glass-strong flex items-center gap-1.5 rounded-full py-1 pr-2.5 pl-1">
+        <span className="flex size-7 items-center justify-center rounded-full bg-black/30">
+          <GoldBar className="w-5" />
         </span>
-        <span className="min-w-8 text-sm font-bold tabular-nums text-gold">{gold}</span>
+        <span className="min-w-6 text-xs font-bold tabular-nums text-gold">{gold}</span>
       </div>
     </div>
   );

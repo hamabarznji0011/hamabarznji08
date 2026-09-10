@@ -4,13 +4,14 @@ import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { globalPlayers, useApp, type Player } from "@/lib/app-store";
 import { GoldPill } from "@/components/GoldCounter";
+import { useHideChrome } from "@/components/chrome";
 
 export const Route = createFileRoute("/app/leaderboards")({
   head: () => ({
     meta: [
-      { title: "پێشەنگەکان — مار و پەیژە" },
+      { title: "ڕیزبەندی — مار و پەیژە" },
       { name: "description", content: "ڕیزبەندی یاریزانان بەپێی خاڵ و زێڕ و هاوڕێکان." },
-      { property: "og:title", content: "پێشەنگەکان — مار و پەیژە" },
+      { property: "og:title", content: "ڕیزبەندی — مار و پەیژە" },
       { property: "og:description", content: "ڕیزبەندی گشتی یاریزانان." },
     ],
   }),
@@ -134,12 +135,26 @@ function LeaderboardsTab() {
 function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void }) {
   const { requestFriend } = useApp();
   const isMe = player.id === "me";
+  const [zoomed, setZoomed] = useState(false);
+
+  useHideChrome();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-background/60" onClick={onClose}>
+      {zoomed && player.avatar && (
+        <div
+          className="animate-soft-in fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomed(false);
+          }}
+        >
+          <img src={player.avatar} alt={player.name} className="max-h-[80vh] w-[85%] max-w-md object-contain" />
+        </div>
+      )}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
+        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
       >
         <div className="flex items-start justify-between">
           <GoldPill amount={player.gold} />
@@ -164,11 +179,18 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
 
         <div className="mt-4 flex flex-col items-center">
           {player.avatar ? (
-            <img
-              src={player.avatar}
-              alt={player.name}
-              className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
-            />
+            <button
+              type="button"
+              onClick={() => setZoomed(true)}
+              aria-label="گەورەکردنی وێنە"
+              className="press"
+            >
+              <img
+                src={player.avatar}
+                alt={player.name}
+                className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
+              />
+            </button>
           ) : (
             <span className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5" />
           )}
