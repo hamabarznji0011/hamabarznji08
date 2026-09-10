@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowRight, LogOut, Menu, ShieldBan, Trash2 } from "lucide-react";
-import { useApp } from "@/lib/app-store";
+import { useRef, useState } from "react";
+import { ArrowRight, Check, LogOut, Menu, Pencil, ShieldBan, Trash2, UserX } from "lucide-react";
+import { NAME_MAX, useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
 
 export const Route = createFileRoute("/app/profile")({
