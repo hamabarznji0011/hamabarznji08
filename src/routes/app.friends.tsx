@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowRight, Ban, Check, Copy, LogOut, Plus, Send, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Ban,
+  Check,
+  Copy,
+  LogOut,
+  Plus,
+  Send,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { formatTime, useApp, type Friend, type Group } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
