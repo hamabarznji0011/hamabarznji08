@@ -438,3 +438,67 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
     </div>
   );
 }
+
+function FriendRequests({ onClose }: { onClose: () => void }) {
+  const { friendRequests, acceptRequest, declineRequest } = useApp();
+  useHideChrome();
+
+  return (
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="flex items-center justify-between pb-4">
+        <span className="w-11" />
+        <h2 className="text-lg font-bold text-panel-foreground">هاوڕێی نوێ</h2>
+        <button
+          onClick={onClose}
+          aria-label="گەڕانەوە"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
+        >
+          <ArrowRight className="size-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
+        {friendRequests.map((r, i) => (
+          <div
+            key={r.id}
+            style={{ animationDelay: `${i * 50}ms` }}
+            className="animate-rise-in flex items-center gap-3 rounded-2xl border border-panel-border bg-panel-foreground/5 p-3"
+          >
+            <img src={r.avatar} alt={r.name} className="size-12 rounded-full bg-secondary" />
+            <div className="flex-1 text-right">
+              <p className="font-bold text-panel-foreground">{r.name}</p>
+              <p className="text-xs text-panel-muted">{r.points} خاڵ</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  acceptRequest(r.id);
+                  toast.success("زیادکرا");
+                }}
+                aria-label="زیادکردن"
+                className="press flex items-center gap-1 rounded-2xl border border-primary/40 bg-primary/15 px-3 py-2 text-sm font-bold text-emerald-700 backdrop-blur-md"
+              >
+                <Check className="size-4" />
+                زیادکردن
+              </button>
+              <button
+                onClick={() => {
+                  declineRequest(r.id);
+                  toast("ڕەتکرایەوە");
+                }}
+                aria-label="ڕەتکردنەوە"
+                className="press flex items-center gap-1 rounded-2xl border border-destructive/40 bg-destructive/15 px-3 py-2 text-sm font-bold text-destructive backdrop-blur-md"
+              >
+                <X className="size-4" />
+                ڕەتکردنەوە
+              </button>
+            </div>
+          </div>
+        ))}
+        {friendRequests.length === 0 && (
+          <p className="pt-10 text-center text-sm text-panel-muted">هیچ داواکارییەک نییە</p>
+        )}
+      </div>
+    </div>
+  );
+}
