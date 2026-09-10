@@ -223,11 +223,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return {
       ...state,
+      friendRequests: state.friendRequests ?? [],
       visibleFriends,
       blockedFriends,
       unreadFor,
       totalUnread,
       playerById: (id) => globalPlayers.find((p) => p.id === id),
+      acceptRequest: (id) =>
+        patch((p) => {
+          const req = (p.friendRequests ?? []).find((r) => r.id === id);
+          return {
+            ...p,
+            friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
+            friends: req && !p.friends.some((f) => f.id === id) ? [...p.friends, req] : p.friends,
+          };
+        }),
+      declineRequest: (id) =>
+        patch((p) => ({
+          ...p,
+          friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
+        })),
+      requestFriend: (player) => {
+        if (
+          state.friends.some((f) => f.id === player.id) ||
+          (state.friendRequests ?? []).some((r) => r.id === player.id)
+        )
+          return "exists";
+        patch((p) => ({
+          ...p,
+          friendRequests: [
+            { ...player } as Friend,
+            ...(p.friendRequests ?? []),
+          ],
+        }));
+        return "added";
+      },
+
       register: (name) =>
         patch((p) => ({
           ...p,
