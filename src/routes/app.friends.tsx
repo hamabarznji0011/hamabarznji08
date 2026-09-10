@@ -150,6 +150,7 @@ function FriendsTab() {
       )}
 
       {popup && <ActionPopup popup={popup} onClose={() => setPopup(null)} />}
+      {requestsOpen && <FriendRequests onClose={() => setRequestsOpen(false)} />}
       {creating && <CreateGroup onClose={() => setCreating(false)} />}
       {openFriend && <DirectChat friend={openFriend} onClose={() => setOpenFriend(null)} />}
       {openGroup && <GroupChat group={openGroup} onClose={() => setOpenGroup(null)} />}
