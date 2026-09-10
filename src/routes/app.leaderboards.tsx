@@ -4,6 +4,7 @@ import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { globalPlayers, useApp, type Player } from "@/lib/app-store";
 import { GoldPill } from "@/components/GoldCounter";
+import { useHideChrome } from "@/components/chrome";
 
 export const Route = createFileRoute("/app/leaderboards")({
   head: () => ({
@@ -178,11 +179,18 @@ function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void 
 
         <div className="mt-4 flex flex-col items-center">
           {player.avatar ? (
-            <img
-              src={player.avatar}
-              alt={player.name}
-              className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
-            />
+            <button
+              type="button"
+              onClick={() => setZoomed(true)}
+              aria-label="گەورەکردنی وێنە"
+              className="press"
+            >
+              <img
+                src={player.avatar}
+                alt={player.name}
+                className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
+              />
+            </button>
           ) : (
             <span className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5" />
           )}
