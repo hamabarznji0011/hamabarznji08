@@ -31,11 +31,12 @@ export const Route = createFileRoute("/app/friends")({
 type View = "friends" | "groups";
 
 function FriendsTab() {
-  const { visibleFriends, groups, unreadFor } = useApp();
+  const { visibleFriends, groups, unreadFor, friendRequests } = useApp();
   const [view, setView] = useState<View>("friends");
   const [openFriend, setOpenFriend] = useState<Friend | null>(null);
   const [openGroup, setOpenGroup] = useState<Group | null>(null);
   const [creating, setCreating] = useState(false);
+  const [requestsOpen, setRequestsOpen] = useState(false);
   const [popup, setPopup] = useState<{ type: "friend" | "group"; id: string } | null>(null);
 
   return (
@@ -47,6 +48,20 @@ function FriendsTab() {
       >
         <Plus className="size-5 text-primary" />
       </button>
+
+      <button
+        onClick={() => setRequestsOpen(true)}
+        aria-label="هاوڕێی نوێ"
+        className="glass press absolute top-[max(1rem,env(safe-area-inset-top))] left-36 flex size-11 items-center justify-center rounded-full"
+      >
+        <UserPlus className="size-5 text-primary" />
+        {friendRequests.length > 0 && (
+          <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            {friendRequests.length}
+          </span>
+        )}
+      </button>
+
 
       <div className="glass relative mb-5 flex rounded-2xl p-1">
         <span
