@@ -19,6 +19,7 @@ export const Route = createFileRoute("/app/profile")({
 function ProfileTab() {
   const { user, gold } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <section className="min-h-screen px-4 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] pb-32">
@@ -36,7 +37,16 @@ function ProfileTab() {
           alt={user?.name ?? "پرۆفایل"}
           className="size-24 rounded-full border-2 border-primary/60 bg-secondary"
         />
-        <h1 className="mt-3 text-2xl font-extrabold">{user?.name ?? "یاریزان"}</h1>
+        <div className="mt-3 flex items-center gap-2">
+          <h1 className="text-2xl font-extrabold">{user?.name ?? "یاریزان"}</h1>
+          <button
+            onClick={() => setEditOpen(true)}
+            aria-label="دەستکاری پرۆفایل"
+            className="press flex size-9 items-center justify-center rounded-full border border-border bg-secondary text-primary"
+          >
+            <Pencil className="size-4" />
+          </button>
+        </div>
         <p className="text-xs text-muted-foreground">هەژماری یاریزان</p>
       </div>
 
