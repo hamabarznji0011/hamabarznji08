@@ -9,9 +9,9 @@ import { useHideChrome } from "@/components/chrome";
 export const Route = createFileRoute("/app/leaderboards")({
   head: () => ({
     meta: [
-      { title: "پێشەنگەکان — مار و پەیژە" },
+      { title: "ڕیزبەندی — مار و پەیژە" },
       { name: "description", content: "ڕیزبەندی یاریزانان بەپێی خاڵ و زێڕ و هاوڕێکان." },
-      { property: "og:title", content: "پێشەنگەکان — مار و پەیژە" },
+      { property: "og:title", content: "ڕیزبەندی — مار و پەیژە" },
       { property: "og:description", content: "ڕیزبەندی گشتی یاریزانان." },
     ],
   }),
