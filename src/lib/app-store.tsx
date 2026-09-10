@@ -66,7 +66,11 @@ type State = {
   readAt: Record<string, number>;
   tokenId: string;
   boardId: string;
+  nameChangedAt: number | null;
 };
+
+export const NAME_MAX = 26;
+export const NAME_COOLDOWN_DAYS = 30;
 
 const STORAGE_KEY = "snakes_ladders_state_v1";
 
@@ -150,6 +154,7 @@ const seedState = (): State => ({
   readAt: { f3: now },
   tokenId: "t1",
   boardId: "b1",
+  nameChangedAt: null,
 });
 
 type Ctx = State & {
@@ -177,7 +182,10 @@ type Ctx = State & {
   acceptRequest: (id: string) => void;
   declineRequest: (id: string) => void;
   requestFriend: (player: Player) => "added" | "exists";
-
+  isNameTaken: (name: string) => boolean;
+  nameCooldownDaysLeft: number;
+  updateProfile: (data: { name?: string; avatar?: string }) => void;
+  deleteAccount: () => void;
 };
 
 const AppContext = createContext<Ctx | null>(null);
