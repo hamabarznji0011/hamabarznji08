@@ -5,6 +5,7 @@ import { boardById, boards, tokenById, tokens } from "@/lib/game-data";
 import { BoardArt, TokenArt } from "@/components/skins";
 import { useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
+import { SnakesGame } from "@/components/SnakesGame";
 
 export const Route = createFileRoute("/app/play")({
   head: () => ({
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/app/play")({
 });
 
 function PlayTab() {
-  const { tokenId, boardId } = useApp();
+  const { tokenId, boardId, user } = useApp();
   const [overlay, setOverlay] = useState<"token" | "board" | null>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -63,7 +64,13 @@ function PlayTab() {
 
       {overlay === "token" && <TokenPicker onClose={() => setOverlay(null)} />}
       {overlay === "board" && <BoardPicker onClose={() => setOverlay(null)} />}
-      {playing && <Gameplay onClose={() => setPlaying(false)} />}
+      {playing && (
+        <SnakesGame
+          board={board}
+          me={{ name: user?.name ?? "من", avatar: user?.avatar ?? "" }}
+          onClose={() => setPlaying(false)}
+        />
+      )}
     </section>
   );
 }
