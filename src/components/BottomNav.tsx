@@ -8,7 +8,7 @@ const items = [
   { to: "/app/friends", label: "هاوڕێکان", Icon: Users },
   { to: "/app/play", label: "یاری", Icon: Dices },
   { to: "/app/store", label: "فرۆشگا", Icon: ShoppingBag },
-  { to: "/app/leaderboards", label: "پێشەنگەکان", Icon: Trophy },
+  { to: "/app/leaderboards", label: "ڕیزبەندی", Icon: Trophy },
 ] as const;
 
 export function BottomNav() {
