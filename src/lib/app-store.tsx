@@ -58,6 +58,7 @@ type State = {
   gold: number;
   online: boolean;
   friends: Friend[];
+  friendRequests: Friend[];
   blockedIds: string[];
   groups: Group[];
   directMessages: Record<string, Message[]>;
@@ -93,8 +94,15 @@ const seedFriends: Friend[] = [
   makeFriend("f6", "دەریا", 2240, 410, 77, 30),
 ];
 
+const seedRequests: Friend[] = [
+  makeFriend("r1", "ئارام", 3420, 760, 132, 70),
+  makeFriend("r2", "نەرمین", 2980, 1120, 118, 55),
+  makeFriend("r3", "زانا", 2510, 430, 88, 39),
+];
+
 export const globalPlayers: Player[] = [
   ...seedFriends,
+
   makeFriend("g1", "سۆران", 7120, 3050, 380, 244),
   makeFriend("g2", "ئەڤین", 6640, 4210, 355, 219),
   makeFriend("g3", "بەختیار", 6010, 1890, 300, 176),
@@ -108,6 +116,7 @@ const seedState = (): State => ({
   gold: 250,
   online: true,
   friends: seedFriends,
+  friendRequests: seedRequests,
   blockedIds: [],
   groups: [
     {
@@ -165,6 +174,10 @@ type Ctx = State & {
   visibleFriends: Friend[];
   blockedFriends: Friend[];
   playerById: (id: string) => Player | undefined;
+  acceptRequest: (id: string) => void;
+  declineRequest: (id: string) => void;
+  requestFriend: (player: Player) => "added" | "exists";
+
 };
 
 const AppContext = createContext<Ctx | null>(null);
@@ -210,11 +223,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return {
       ...state,
+      friendRequests: state.friendRequests ?? [],
       visibleFriends,
       blockedFriends,
       unreadFor,
       totalUnread,
       playerById: (id) => globalPlayers.find((p) => p.id === id),
+      acceptRequest: (id) =>
+        patch((p) => {
+          const req = (p.friendRequests ?? []).find((r) => r.id === id);
+          return {
+            ...p,
+            friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
+            friends: req && !p.friends.some((f) => f.id === id) ? [...p.friends, req] : p.friends,
+          };
+        }),
+      declineRequest: (id) =>
+        patch((p) => ({
+          ...p,
+          friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
+        })),
+      requestFriend: (player) => {
+        if (
+          state.friends.some((f) => f.id === player.id) ||
+          (state.friendRequests ?? []).some((r) => r.id === player.id)
+        )
+          return "exists";
+        patch((p) => ({
+          ...p,
+          friendRequests: [
+            { ...player } as Friend,
+            ...(p.friendRequests ?? []),
+          ],
+        }));
+        return "added";
+      },
+
       register: (name) =>
         patch((p) => ({
           ...p,
