@@ -178,9 +178,10 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
-  const { online, setOnline, logout, blockedFriends, unblockFriend } = useApp();
+  const { online, setOnline, logout, blockedFriends, unblockFriend, deleteAccount } = useApp();
   const navigate = useNavigate();
   const [showBlocked, setShowBlocked] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useHideChrome();
 
@@ -248,6 +249,47 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
             <LogOut className="size-5" />
             <span className="font-semibold">دەرچوون</span>
           </button>
+
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="press flex w-full items-center gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-600"
+          >
+            <UserX className="size-5" />
+            <span className="font-semibold">سڕینەوەی هەژمار</span>
+          </button>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div
+          className="animate-soft-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-6"
+          onClick={() => setConfirmDelete(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="panel w-full max-w-xs rounded-3xl p-5 text-center shadow-[var(--shadow-glass)]"
+          >
+            <p className="text-sm font-bold text-panel-foreground">
+              دڵنیایت لە سڕینەوەی هەژمارەکەت بۆ هەمیشە؟
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => {
+                  deleteAccount();
+                  navigate({ to: "/" });
+                }}
+                className="press flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white"
+              >
+                بەڵێ
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="press flex-1 rounded-2xl bg-emerald-500 py-3 text-sm font-bold text-white"
+              >
+                نەخێر
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
