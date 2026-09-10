@@ -5,6 +5,7 @@ import { boardById, boards, tokenById, tokens } from "@/lib/game-data";
 import { BoardArt, TokenArt } from "@/components/skins";
 import { useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
+import { SnakesGame } from "@/components/SnakesGame";
 
 export const Route = createFileRoute("/app/play")({
   head: () => ({
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/app/play")({
 });
 
 function PlayTab() {
-  const { tokenId, boardId } = useApp();
+  const { tokenId, boardId, user } = useApp();
   const [overlay, setOverlay] = useState<"token" | "board" | null>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -63,7 +64,13 @@ function PlayTab() {
 
       {overlay === "token" && <TokenPicker onClose={() => setOverlay(null)} />}
       {overlay === "board" && <BoardPicker onClose={() => setOverlay(null)} />}
-      {playing && <Gameplay onClose={() => setPlaying(false)} />}
+      {playing && (
+        <SnakesGame
+          board={board}
+          me={{ name: user?.name ?? "من", avatar: user?.avatar ?? "" }}
+          onClose={() => setPlaying(false)}
+        />
+      )}
     </section>
   );
 }
@@ -140,51 +147,3 @@ function BoardPicker({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Gameplay({ onClose }: { onClose: () => void }) {
-  const { tokenId, boardId } = useApp();
-  const token = tokenById(tokenId);
-  const board = boardById(boardId);
-  const [pos, setPos] = useState(1);
-  const [dice, setDice] = useState(1);
-  useHideChrome();
-
-  const roll = () => {
-    const value = 1 + Math.floor(Math.random() * 6);
-    setDice(value);
-    setPos((p) => Math.min(100, p + value));
-  };
-
-  return (
-    <div className="animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col bg-background/95 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8 backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onClose}
-          aria-label="گەڕانەوە"
-          className="glass press flex size-11 items-center justify-center rounded-full"
-        >
-          <ArrowRight className="size-5" />
-        </button>
-        <h2 className="text-lg font-bold">یاری</h2>
-        <span className="size-11" />
-      </div>
-
-      <div className="relative mt-5">
-        <BoardArt board={board} className="w-full rounded-2xl" />
-      </div>
-
-      <div className="glass mt-5 flex items-center justify-between rounded-2xl p-4">
-        <div className="flex items-center gap-2">
-          <TokenArt token={token} className="h-10 w-auto" />
-          <span className="text-sm font-bold">خانەی {pos}</span>
-        </div>
-        <button
-          onClick={roll}
-          className="press flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 font-bold text-primary-foreground"
-        >
-          <Dices className="size-5" />
-          تاوەدان ({dice})
-        </button>
-      </div>
-    </div>
-  );
-}
