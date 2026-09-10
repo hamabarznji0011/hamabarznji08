@@ -267,6 +267,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return "added";
       },
 
+      isNameTaken: (name) => {
+        const q = name.trim().toLowerCase();
+        if (!q) return false;
+        if (q === (state.user?.name ?? "").trim().toLowerCase()) return false;
+        return [...globalPlayers, ...state.friends, ...(state.friendRequests ?? [])].some(
+          (p) => p.name.trim().toLowerCase() === q,
+        );
+      },
+      nameCooldownDaysLeft: (() => {
+        if (!state.nameChangedAt) return 0;
+        const elapsed = Date.now() - state.nameChangedAt;
+        const total = NAME_COOLDOWN_DAYS * 86_400_000;
+        return elapsed >= total ? 0 : Math.ceil((total - elapsed) / 86_400_000);
+      })(),
+      updateProfile: ({ name, avatar }) =>
+        patch((p) => {
+          if (!p.user) return p;
+          const nameChanged = !!name && name !== p.user.name;
+          return {
+            ...p,
+            user: {
+              ...p.user,
+              name: name ?? p.user.name,
+              avatar: avatar ?? p.user.avatar,
+            },
+            savedAccount: nameChanged ? { name: name! } : p.savedAccount,
+            nameChangedAt: nameChanged ? Date.now() : p.nameChangedAt,
+          };
+        }),
+      deleteAccount: () => {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
+        setState(seedState());
+      },
+
       register: (name) =>
         patch((p) => ({
           ...p,
