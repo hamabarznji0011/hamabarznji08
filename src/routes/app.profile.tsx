@@ -58,7 +58,113 @@ function ProfileTab() {
       </div>
 
       {menuOpen && <ProfileMenu onClose={() => setMenuOpen(false)} />}
+      {editOpen && <EditProfile onClose={() => setEditOpen(false)} />}
     </section>
+  );
+}
+
+function EditProfile({ onClose }: { onClose: () => void }) {
+  const { user, updateProfile, isNameTaken, nameCooldownDaysLeft } = useApp();
+  const [name, setName] = useState(user?.name ?? "");
+  const [avatar, setAvatar] = useState(user?.avatar ?? "");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useHideChrome();
+
+  const locked = nameCooldownDaysLeft > 0;
+  const tooLong = name.trim().length > NAME_MAX;
+  const taken = !tooLong && isNameTaken(name);
+  const empty = name.trim().length === 0;
+  const valid = !tooLong && !taken && !empty;
+
+  const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAvatar(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
+  const save = () => {
+    if (!valid && !locked) return;
+    updateProfile({ name: locked ? undefined : name.trim(), avatar });
+    onClose();
+  };
+
+  const borderClass = locked
+    ? "border-panel-border"
+    : valid
+      ? "border-emerald-500 shadow-[0_0_18px_-2px_rgba(16,185,129,0.8)]"
+      : "border-red-500 shadow-[0_0_18px_-2px_rgba(239,68,68,0.8)]";
+
+  return (
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onClose}
+          aria-label="گەڕانەوە"
+          className="press flex size-11 items-center justify-center rounded-full border border-panel-border bg-panel-foreground/5 text-panel-foreground"
+        >
+          <ArrowRight className="size-5" />
+        </button>
+        <h2 className="text-lg font-bold">دەستکاری پرۆفایل</h2>
+        <button
+          onClick={save}
+          disabled={!locked && !valid}
+          aria-label="پاشەکەوتکردن"
+          className="press flex size-11 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_0_24px_-2px_rgba(16,185,129,0.9)] disabled:opacity-40 disabled:shadow-none"
+        >
+          <Check className="size-5" />
+        </button>
+      </div>
+
+      <div className="mt-8 flex flex-col items-center">
+        <button
+          onClick={() => fileRef.current?.click()}
+          aria-label="گۆڕینی وێنە"
+          className="press relative"
+        >
+          <img
+            src={avatar}
+            alt={name}
+            className="size-28 rounded-full border-2 border-panel-border bg-panel-foreground/5 object-cover"
+          />
+          <span className="absolute bottom-0 left-0 flex size-9 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <Pencil className="size-4" />
+          </span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={pickImage}
+          className="hidden"
+        />
+      </div>
+
+      <div className="mt-8">
+        <span className="mb-1.5 block text-xs font-semibold text-panel-muted">ناوی بەکارهێنەر</span>
+        <input
+          value={name}
+          disabled={locked}
+          onChange={(e) => setName(e.target.value)}
+          className={`w-full rounded-2xl border-2 bg-panel-foreground/5 px-4 py-3 text-sm text-panel-foreground outline-none transition-all disabled:opacity-60 ${borderClass}`}
+        />
+        {locked ? (
+          <p className="mt-2 text-[11px] font-light text-panel-muted">
+            دەتوانیت دوای {nameCooldownDaysLeft} ڕۆژ ناوەکەت بگۆڕیت
+          </p>
+        ) : tooLong ? (
+          <p className="mt-2 text-[11px] font-light text-red-500">
+            ناوی بەکارهێنەر دەبێت {NAME_MAX} پیت یان کەمتر بێت.
+          </p>
+        ) : taken ? (
+          <p className="mt-2 text-[11px] font-light text-red-500">
+            ئەم ناوە پێشتر وەرگیراوە. تکایە ناوێکی تر هەڵبژێرە.
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
