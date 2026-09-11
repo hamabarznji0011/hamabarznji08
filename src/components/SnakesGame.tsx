@@ -200,7 +200,7 @@ function Token({ player, offset }: { player: GamePlayer; offset: number }) {
     <div
       className="absolute size-[7%] -translate-x-1/2 translate-y-1/2 rounded-full border-2"
       style={{
-        left: `${c.x + spread[0]!}%`,
+        left: `${100 - (c.x + spread[0]!)}%`,
         bottom: `${c.y + spread[1]!}%`,
         background: `radial-gradient(circle at 32% 26%, #ffffffcc, ${player.color.from} 42%, ${player.color.to})`,
         borderColor: "#ffffff",
