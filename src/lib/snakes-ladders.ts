@@ -83,4 +83,19 @@ export function jumpFor(square: number): { to: number; kind: "ladder" | "snake" 
 
 export const BOT_NAMES = ["ئارام", "شیلان", "هێمن"];
 
+/** Cute snake body colors, keyed by snake head square. */
+export const SNAKE_COLORS: Record<number, { body: string; belly: string; dark: string }> = {
+  27: { body: "#a78bfa", belly: "#ddd6fe", dark: "#7c3aed" },
+  40: { body: "#f472b6", belly: "#fbcfe8", dark: "#db2777" },
+  43: { body: "#e8b84a", belly: "#fde9b0", dark: "#b98a1c" },
+  54: { body: "#60a5fa", belly: "#bfdbfe", dark: "#2563eb" },
+  66: { body: "#34d399", belly: "#bbf7d0", dark: "#059669" },
+  76: { body: "#c97b45", belly: "#f5cba7", dark: "#9a4f22" },
+  89: { body: "#5eead4", belly: "#ccfbf1", dark: "#0d9488" },
+  99: { body: "#818cf8", belly: "#c7d2fe", dark: "#4f46e5" },
+};
+
+export const REACTIONS = ["واو!", "ئافەرەم!", "بژی", "هههە", "بەختێکی باش", "یاری باش"];
+
 export const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
