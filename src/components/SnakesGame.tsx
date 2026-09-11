@@ -32,7 +32,7 @@ function BoardGrid() {
     <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[14px]">
       {rows.map((row) => {
         const cells = Array.from({ length: BOARD_SIZE }, (_, i) => {
-          const idx = row % 2 === 0 ? i : BOARD_SIZE - 1 - i;
+          const idx = row % 2 === 0 ? BOARD_SIZE - 1 - i : i;
           return { n: row * BOARD_SIZE + idx + 1, col: i };
         });
         return (
@@ -70,8 +70,9 @@ function BoardGrid() {
 
 const pt = (n: number) => {
   const c = squareCenter(n);
-  return { x: c.x, y: 100 - c.y };
+  return { x: 100 - c.x, y: 100 - c.y };
 };
+
 
 function Ladders() {
   return (
