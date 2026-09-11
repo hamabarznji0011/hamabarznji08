@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Star } from "lucide-react";
 import {
   BOARD_SIZE,
   BOT_NAMES,
   LADDERS,
   LAST_SQUARE,
   PLAYER_COLORS,
+  REACTIONS,
   SNAKES,
+  SNAKE_COLORS,
   delay,
   jumpFor,
   squareCenter,
@@ -19,40 +21,42 @@ import { useHideChrome } from "@/components/chrome";
 const STEP_MS = 220;
 const JUMP_MS = 750;
 
+const CELL_GREEN = "#bfe0a8";
+const CELL_WHITE = "#f6f5ef";
+
 /* ---------------------------------- board --------------------------------- */
 
-function BoardGrid({ board }: { board: BoardSkin }) {
-  const [dark, mid, light] = board.colors;
+function BoardGrid() {
   const rows = Array.from({ length: BOARD_SIZE }, (_, i) => BOARD_SIZE - 1 - i); // top row first
   return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden rounded-2xl" style={{ background: dark }}>
+    <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[14px]">
       {rows.map((row) => {
         const cells = Array.from({ length: BOARD_SIZE }, (_, i) => {
-          const idx = row % 2 === 0 ? i : BOARD_SIZE - 1 - i;
+          const idx = row % 2 === 0 ? BOARD_SIZE - 1 - i : i;
           return { n: row * BOARD_SIZE + idx + 1, col: i };
         });
         return (
           <div key={row} className="flex flex-1">
             {cells.map(({ n, col }) => {
-              const isLadder = LADDERS[n] !== undefined;
-              const isSnake = SNAKES[n] !== undefined;
+              const isLast = n === LAST_SQUARE;
               return (
                 <div
                   key={n}
-                  className="relative flex-1 border border-black/10"
-                  style={{ background: (col + row) % 2 === 0 ? mid : dark }}
+                  className="relative flex flex-1 items-center justify-center border-[0.5px] border-black/5"
+                  style={{
+                    background: isLast
+                      ? "linear-gradient(150deg,#c0392b,#8e2019)"
+                      : (col + row) % 2 === 0
+                        ? CELL_GREEN
+                        : CELL_WHITE,
+                  }}
                 >
-                  <span
-                    className="absolute left-[3px] top-[1px] text-[7px] font-bold leading-none"
-                    style={{ color: light, opacity: 0.85 }}
-                  >
-                    {n}
-                  </span>
-                  {(isLadder || isSnake) && (
-                    <span
-                      className="absolute bottom-[2px] right-[2px] size-1.5 rounded-full"
-                      style={{ background: isLadder ? "#4ade80" : "#f87171" }}
-                    />
+                  {isLast ? (
+                    <Star className="size-[55%] fill-[#f2c14e] text-[#c99a24]" />
+                  ) : (
+                    <span className="select-none text-[9px] font-bold leading-none text-[#4a4a4a]">
+                      {n}
+                    </span>
                   )}
                 </div>
               );
@@ -64,72 +68,118 @@ function BoardGrid({ board }: { board: BoardSkin }) {
   );
 }
 
-function BoardPaths() {
-  const pt = (n: number) => {
-    const c = squareCenter(n);
-    return { x: c.x, y: 100 - c.y };
-  };
+const pt = (n: number) => {
+  const c = squareCenter(n);
+  return { x: 100 - c.x, y: 100 - c.y };
+};
+
+
+function Ladders() {
   return (
     <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
       <defs>
-        <linearGradient id="sg-ladder" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fde68a" />
-          <stop offset="100%" stopColor="#b45309" />
-        </linearGradient>
-        <linearGradient id="sg-snake" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#34d399" />
-          <stop offset="100%" stopColor="#065f46" />
+        <linearGradient id="sg-rail" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#b02a20" />
+          <stop offset="45%" stopColor="#f0574a" />
+          <stop offset="100%" stopColor="#8f1f18" />
         </linearGradient>
       </defs>
-
       {Object.entries(LADDERS).map(([from, to]) => {
         const a = pt(Number(from));
         const b = pt(to);
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
-        const nx = (-dy / len) * 1.7;
-        const ny = (dx / len) * 1.7;
-        const rungs = Math.max(3, Math.round(len / 6));
+        const nx = (-dy / len) * 2.6;
+        const ny = (dx / len) * 2.6;
+        const rungs = Math.max(3, Math.round(len / 7));
         return (
-          <g key={`l-${from}`} stroke="url(#sg-ladder)" strokeWidth="1.1" strokeLinecap="round">
-            <line x1={a.x + nx} y1={a.y + ny} x2={b.x + nx} y2={b.y + ny} />
-            <line x1={a.x - nx} y1={a.y - ny} x2={b.x - nx} y2={b.y - ny} />
+          <g key={`l-${from}`} strokeLinecap="round">
+            {/* rungs behind rails */}
             {Array.from({ length: rungs }, (_, i) => {
               const t = (i + 0.5) / rungs;
               const cx = a.x + dx * t;
               const cy = a.y + dy * t;
               return (
-                <line key={i} x1={cx + nx} y1={cy + ny} x2={cx - nx} y2={cy - ny} strokeWidth="0.8" />
+                <g key={i}>
+                  <line
+                    x1={cx + nx}
+                    y1={cy + ny}
+                    x2={cx - nx}
+                    y2={cy - ny}
+                    stroke="#7d1a14"
+                    strokeWidth="1.5"
+                  />
+                  <line
+                    x1={cx + nx}
+                    y1={cy + ny - 0.35}
+                    x2={cx - nx}
+                    y2={cy - ny - 0.35}
+                    stroke="#f5776a"
+                    strokeWidth="0.7"
+                  />
+                </g>
               );
             })}
+            <line
+              x1={a.x + nx}
+              y1={a.y + ny}
+              x2={b.x + nx}
+              y2={b.y + ny}
+              stroke="url(#sg-rail)"
+              strokeWidth="1.7"
+            />
+            <line
+              x1={a.x - nx}
+              y1={a.y - ny}
+              x2={b.x - nx}
+              y2={b.y - ny}
+              stroke="url(#sg-rail)"
+              strokeWidth="1.7"
+            />
           </g>
         );
       })}
+    </svg>
+  );
+}
 
-      {Object.entries(SNAKES).map(([head, tail]) => {
+function Snakes() {
+  return (
+    <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
+      {Object.entries(SNAKES).map(([head, tail], idx) => {
         const a = pt(Number(head));
         const b = pt(tail);
-        const mx = (a.x + b.x) / 2;
-        const my = (a.y + b.y) / 2;
+        const c = SNAKE_COLORS[Number(head)] ?? { body: "#34d399", belly: "#bbf7d0", dark: "#059669" };
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
-        const ox = (-dy / len) * 9;
-        const oy = (dx / len) * 9;
+        const ox = (-dy / len) * 11;
+        const oy = (dx / len) * 11;
+        const p1 = { x: a.x + dx * 0.3 + ox, y: a.y + dy * 0.3 + oy };
+        const p2 = { x: a.x + dx * 0.7 - ox, y: a.y + dy * 0.7 - oy };
+        const d = `M ${a.x} ${a.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${b.x} ${b.y}`;
+        const hx = a.x - dx / len * 0.4;
+        const hy = a.y - dy / len * 0.4;
         return (
-          <g key={`s-${head}`}>
-            <path
-              d={`M ${a.x} ${a.y} Q ${mx + ox} ${my + oy} ${b.x} ${b.y}`}
-              stroke="url(#sg-snake)"
-              strokeWidth="2.6"
-              fill="none"
-              strokeLinecap="round"
-              opacity="0.95"
-            />
-            <circle cx={a.x} cy={a.y} r="2.4" fill="#065f46" />
-            <circle cx={a.x - 0.9} cy={a.y - 0.7} r="0.5" fill="#fff" />
-            <circle cx={a.x + 0.9} cy={a.y - 0.7} r="0.5" fill="#fff" />
+          <g
+            key={`s-${head}`}
+            style={{ animation: `sg-slither 6s ease-in-out ${idx * 0.4}s infinite`, transformOrigin: `${a.x}% ${a.y}%` }}
+          >
+            <path d={d} stroke="rgba(0,0,0,.16)" strokeWidth="4.6" fill="none" strokeLinecap="round" transform="translate(0.5,0.7)" />
+            <path d={d} stroke={c.dark} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+            <path d={d} stroke={c.body} strokeWidth="3.4" fill="none" strokeLinecap="round" />
+            <path d={d} stroke={c.belly} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity="0.55" />
+            {/* head */}
+            <circle cx={hx} cy={hy} r="3.2" fill={c.body} stroke={c.dark} strokeWidth="0.6" />
+            <circle cx={hx - 1.2} cy={hy - 0.9} r="1.15" fill="#fff" />
+            <circle cx={hx + 1.2} cy={hy - 0.9} r="1.15" fill="#fff" />
+            <circle cx={hx - 1.2} cy={hy - 0.9} r="0.5" fill="#111">
+              <animate attributeName="cy" values={`${hy - 0.9};${hy - 0.4};${hy - 0.9}`} dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx={hx + 1.2} cy={hy - 0.9} r="0.5" fill="#111">
+              <animate attributeName="cy" values={`${hy - 0.9};${hy - 0.4};${hy - 0.9}`} dur="3s" repeatCount="indefinite" />
+            </circle>
           </g>
         );
       })}
@@ -148,13 +198,14 @@ function Token({ player, offset }: { player: GamePlayer; offset: number }) {
   ][offset] ?? [0, 0];
   return (
     <div
-      className="absolute size-[7%] -translate-x-1/2 translate-y-1/2 rounded-full border-2 shadow-lg"
+      className="absolute size-[7%] -translate-x-1/2 translate-y-1/2 rounded-full border-2"
       style={{
-        left: `${c.x + spread[0]!}%`,
+        left: `${100 - (c.x + spread[0]!)}%`,
         bottom: `${c.y + spread[1]!}%`,
-        background: `radial-gradient(circle at 30% 25%, ${player.color.ring}, ${player.color.from} 45%, ${player.color.to})`,
-        borderColor: "rgba(255,255,255,0.85)",
-        opacity: on ? 1 : 0.55,
+        background: `radial-gradient(circle at 32% 26%, #ffffffcc, ${player.color.from} 42%, ${player.color.to})`,
+        borderColor: "#ffffff",
+        boxShadow: "0 3px 6px rgba(0,0,0,.35)",
+        opacity: on ? 1 : 0.6,
         transition: `left ${STEP_MS}ms cubic-bezier(.3,.9,.35,1), bottom ${STEP_MS}ms cubic-bezier(.3,.9,.35,1)`,
         zIndex: 20 + offset,
       }}
@@ -167,50 +218,51 @@ function Token({ player, offset }: { player: GamePlayer; offset: number }) {
 const PIPS: Record<number, [number, number][]> = {
   1: [[50, 50]],
   2: [
-    [28, 28],
-    [72, 72],
+    [30, 30],
+    [70, 70],
   ],
   3: [
-    [26, 26],
+    [28, 28],
     [50, 50],
-    [74, 74],
+    [72, 72],
   ],
   4: [
-    [28, 28],
-    [72, 28],
-    [28, 72],
-    [72, 72],
+    [30, 30],
+    [70, 30],
+    [30, 70],
+    [70, 70],
   ],
   5: [
-    [28, 28],
-    [72, 28],
+    [30, 30],
+    [70, 30],
     [50, 50],
-    [28, 72],
-    [72, 72],
+    [30, 70],
+    [70, 70],
   ],
   6: [
-    [28, 24],
-    [72, 24],
-    [28, 50],
-    [72, 50],
-    [28, 76],
-    [72, 76],
+    [30, 26],
+    [70, 26],
+    [30, 50],
+    [70, 50],
+    [30, 74],
+    [70, 74],
   ],
 };
 
 function DiceFace({ value, rolling }: { value: number; rolling: boolean }) {
   return (
     <div
-      className="grid size-14 place-items-center rounded-2xl"
+      className="grid size-[68px] place-items-center rounded-[18px]"
       style={{
-        background: "linear-gradient(155deg,#ffffff,#dfe4ec 60%,#b9c1cf)",
-        boxShadow: "inset 0 2px 3px rgba(255,255,255,.9), inset 0 -4px 6px rgba(0,0,0,.22), 0 8px 18px rgba(0,0,0,.35)",
+        background: "linear-gradient(155deg,#ffffff,#f4f1e6 60%,#ded9c7)",
+        boxShadow:
+          "inset 0 3px 4px rgba(255,255,255,.95), inset 0 -6px 8px rgba(0,0,0,.14), 0 10px 18px rgba(0,0,0,.25)",
         animation: rolling ? "sg-shake .35s linear infinite" : undefined,
       }}
     >
-      <svg viewBox="0 0 100 100" className="size-full">
+      <svg viewBox="0 0 100 100" className="size-full p-2">
         {PIPS[value]!.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r="9" fill="#1f2430" />
+          <circle key={i} cx={x} cy={y} r="8.5" fill="#141414" />
         ))}
       </svg>
     </div>
@@ -254,7 +306,7 @@ function Confetti() {
 /* --------------------------------- game ----------------------------------- */
 
 export function SnakesGame({
-  board,
+  board: _board,
   me,
   onClose,
 }: {
@@ -279,6 +331,7 @@ export function SnakesGame({
   const [dice, setDice] = useState(1);
   const [rolling, setRolling] = useState(false);
   const [status, setStatus] = useState("");
+  const [reaction, setReaction] = useState<string | null>(null);
   const [winner, setWinner] = useState<GamePlayer | null>(null);
   const busy = useRef(false);
   const alive = useRef(true);
@@ -305,7 +358,7 @@ export function SnakesGame({
       if (busy.current || winner) return;
       busy.current = true;
 
-      let index = playerIndex;
+      const index = playerIndex;
       let again = true;
       while (again && alive.current && !winner) {
         again = false;
@@ -322,7 +375,6 @@ export function SnakesGame({
         await delay(180);
         if (!alive.current) break;
 
-        // read the freshest position
         let from = 0;
         setPlayers((ps) => {
           from = ps.find((p) => p.id === current.id)!.position;
@@ -340,7 +392,7 @@ export function SnakesGame({
 
         const jump = jumpFor(pos);
         if (jump) {
-          setStatus(jump.kind === "ladder" ? `${current.name} بە پەیژە سەرکەوت! 🪜` : `${current.name} مار خواردی! 🐍`);
+          setStatus(jump.kind === "ladder" ? `${current.name} بە پەیژە سەرکەوت!` : `${current.name} مار خواردی!`);
           await delay(250);
           pos = jump.to;
           setPos(current.id, jump.to);
@@ -348,7 +400,6 @@ export function SnakesGame({
         }
         if (!alive.current) return;
 
-        // collision: eat any other token on this square
         let eaten: string[] = [];
         setPlayers((ps) => {
           eaten = ps.filter((p) => p.id !== current.id && p.position === pos && pos > 0).map((p) => p.name);
@@ -357,7 +408,7 @@ export function SnakesGame({
           );
         });
         if (eaten.length) {
-          setStatus(`${current.name} ${eaten.join(" و ")}ی خوارد! 💥`);
+          setStatus(`${current.name} ${eaten.join(" و ")}ی خوارد!`);
           await delay(500);
         }
 
@@ -368,21 +419,19 @@ export function SnakesGame({
         }
 
         if (roll === 6) {
-          setStatus(`${current.name} شەشی هێنا — جارێکی تر! 🎲`);
+          setStatus(`${current.name} شەشی هێنا — جارێکی تر!`);
           again = true;
           await delay(500);
         }
       }
 
       busy.current = false;
-      const next = (index + 1) % players.length;
-      setTurn(next);
+      setTurn((index + 1) % players.length);
       setStatus("");
     },
     [players, setPos, winner],
   );
 
-  // bots play automatically
   useEffect(() => {
     if (phase !== "playing" || winner) return;
     const current = players[turn];
@@ -392,83 +441,158 @@ export function SnakesGame({
   }, [phase, turn, winner, players, takeTurn]);
 
   const myTurn = players[turn]?.isHuman && !winner && !busy.current;
+  const meP = players[0]!;
+  const opponents = players.slice(1);
 
   return (
-    <div className="animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col bg-[#0d1117] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
+    <div
+      dir="rtl"
+      className="animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col overflow-hidden px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      style={{
+        background:
+          "radial-gradient(120% 80% at 50% 0%, #f7ecd9 0%, #f1e2c8 55%, #e9d9bd 100%)",
+      }}
+    >
       <style>{`
 @keyframes sg-shake { 0%{transform:rotate(-12deg) translateY(0)} 50%{transform:rotate(14deg) translateY(-4px)} 100%{transform:rotate(-12deg) translateY(0)} }
 @keyframes sg-fall { 0%{transform:translateY(0) rotate(0)} 100%{transform:translateY(115vh) rotate(720deg)} }
-@keyframes sg-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+@keyframes sg-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
 @keyframes sg-radar { 0%{transform:scale(.4);opacity:.9} 100%{transform:scale(2.4);opacity:0} }
+@keyframes sg-slither { 0%,100%{transform:rotate(-1.2deg)} 50%{transform:rotate(1.2deg)} }
+@keyframes sg-pop { 0%{transform:scale(.6);opacity:0} 25%{transform:scale(1.05);opacity:1} 80%{opacity:1} 100%{transform:scale(1);opacity:0} }
 `}</style>
 
-      <div className="flex items-center justify-between">
+      {/* leafy decorations */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -left-10 top-24 size-40 rounded-full bg-[#8cc06a]/25 blur-2xl" />
+        <div className="absolute -right-12 top-1/2 size-44 rounded-full bg-[#6fae55]/20 blur-2xl" />
+        <div className="absolute bottom-4 -left-8 size-36 rounded-full bg-[#7cb85f]/25 blur-2xl" />
+      </div>
+
+      {/* top bar */}
+      <div className="relative flex items-center justify-between">
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
-          className="glass press flex size-10 items-center justify-center rounded-full text-white"
+          className="press flex size-11 items-center justify-center rounded-full bg-white text-[#c0392b] shadow-md"
         >
           <ArrowRight className="size-5" />
         </button>
-        <h2 className="text-base font-bold text-white">مار و پەیژە</h2>
-        <span className="size-10" />
+        <div className="flex items-center gap-2 rounded-full border-2 border-[#c0392b] bg-white px-4 py-2 shadow-md">
+          <span className="size-2.5 rounded-full bg-[#c0392b]" />
+          <span className="text-sm font-extrabold text-[#2c2c2c]">
+            {myTurn ? "نۆرەی تۆیە" : `نۆرەی ${players[turn]?.name ?? ""}`}
+          </span>
+        </div>
+        <span className="size-11" />
       </div>
 
       {phase === "matchmaking" ? (
         <Matchmaking players={players} />
       ) : (
         <>
-          {/* scoreboard */}
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {players.map((p, i) => (
-              <div
-                key={p.id}
-                className="rounded-2xl border p-1.5 text-center"
-                style={{
-                  borderColor: turn === i ? p.color.ring : "rgba(255,255,255,.12)",
-                  background: turn === i ? "rgba(255,255,255,.10)" : "rgba(255,255,255,.04)",
-                  animation: turn === i ? "sg-pulse 1.3s ease-in-out infinite" : undefined,
-                }}
-              >
-                <div className="mx-auto size-8 overflow-hidden rounded-full border-2" style={{ borderColor: p.color.from }}>
-                  <img src={p.avatar} alt={p.name} className="size-full object-cover" />
+          {/* opponents */}
+          <div className="relative mt-3 grid grid-cols-3 gap-2">
+            {opponents.map((p) => {
+              const active = players[turn]?.id === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className="rounded-2xl bg-white p-2 text-center shadow-[0_6px_14px_rgba(0,0,0,.10)]"
+                  style={{
+                    outline: active ? "2px solid #c0392b" : "none",
+                    animation: active ? "sg-pulse 1.3s ease-in-out infinite" : undefined,
+                  }}
+                >
+                  <div className="relative mx-auto size-10">
+                    <img src={p.avatar} alt={p.name} className="size-10 rounded-full object-cover" />
+                    <span
+                      className="absolute -bottom-0.5 -left-0.5 size-3 rounded-full border-2 border-white"
+                      style={{ background: p.color.from }}
+                    />
+                  </div>
+                  <p className="mt-1 truncate text-[11px] font-bold text-[#2c2c2c]">{p.name}</p>
+                  <span className="mt-1 inline-block rounded-full bg-[#f4f1e6] px-2 py-0.5 text-[10px] font-bold text-[#8a6d1f]">
+                    {p.position}
+                  </span>
                 </div>
-                <p className="mt-1 truncate text-[10px] font-bold text-white">{p.name}</p>
-                <p className="text-[10px] font-semibold" style={{ color: p.color.ring }}>
-                  {p.position}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* board */}
-          <div dir="ltr" className="relative mt-3 aspect-square w-full">
-            <BoardGrid board={board} />
-            <BoardPaths />
-            {players.map((p, i) => (
-              <Token key={p.id} player={p} offset={i} />
-            ))}
+          <div
+            dir="ltr"
+            className="relative mt-3 aspect-square w-full rounded-[16px] p-[3px]"
+            style={{ background: "#ffffff", boxShadow: "0 14px 30px rgba(0,0,0,.18)" }}
+          >
+            <div className="relative size-full">
+              <BoardGrid />
+              <Ladders />
+              <Snakes />
+              {players.map((p, i) => (
+                <Token key={p.id} player={p} offset={i} />
+              ))}
+            </div>
           </div>
 
-          <p className="mt-2 h-5 text-center text-xs font-semibold text-white/80">{status}</p>
+          <p className="mt-1.5 h-5 text-center text-[11px] font-bold text-[#6b5a3e]">{status}</p>
 
-          {/* controls */}
-          <div className="mt-auto flex items-center justify-between rounded-3xl border border-white/10 bg-white/5 p-3">
-            <div className="text-right">
-              <p className="text-[11px] text-white/60">نۆرەی</p>
-              <p className="text-sm font-bold" style={{ color: players[turn]?.color.ring }}>
-                {players[turn]?.name}
-              </p>
-            </div>
+          {/* dice */}
+          <div className="relative mt-1 flex items-center justify-center">
             <button
               onClick={() => void takeTurn(turn)}
               disabled={!myTurn}
-              className="press flex items-center gap-3 rounded-2xl px-4 py-2.5 font-bold text-white disabled:opacity-45"
-              style={{ background: "linear-gradient(160deg,#2f7cf6,#1741a6)", boxShadow: "0 10px 22px rgba(23,65,166,.45)" }}
+              aria-label="تاوەدان"
+              className="press disabled:opacity-50"
             >
               <DiceFace value={dice} rolling={rolling} />
-              <span className="text-sm">تاوەدان</span>
             </button>
+            {reaction && (
+              <span
+                className="pointer-events-none absolute -top-6 rounded-full bg-white px-3 py-1 text-sm font-bold text-[#2c2c2c] shadow"
+                style={{ animation: "sg-pop 1.8s ease-out forwards" }}
+              >
+                {reaction}
+              </span>
+            )}
+          </div>
+
+          {/* reactions */}
+          <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
+            {REACTIONS.map((r) => (
+              <button
+                key={r}
+                onClick={() => {
+                  setReaction(r);
+                  setTimeout(() => setReaction(null), 1800);
+                }}
+                className="press shrink-0 rounded-full border border-[#8cc06a]/50 bg-[#8cc06a]/25 px-4 py-2 text-sm font-bold text-[#33502a] backdrop-blur-sm"
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          {/* my bar */}
+          <div className="mt-2 flex items-center gap-3 rounded-2xl border-2 border-[#c0392b] bg-white p-2 shadow-[0_8px_18px_rgba(0,0,0,.12)]">
+            <img
+              src={meP.avatar}
+              alt={meP.name}
+              className="size-11 rounded-full border-2 border-[#c0392b] object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-extrabold text-[#2c2c2c]">{meP.name}</p>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#eee8dc]">
+                <div
+                  className="h-full rounded-full bg-[#c0392b] transition-all duration-300"
+                  style={{ width: `${meP.position}%` }}
+                />
+              </div>
+            </div>
+            <span className="rounded-full bg-[#f4f1e6] px-2.5 py-1 text-xs font-bold text-[#8a6d1f]">
+              {meP.position}/100
+            </span>
           </div>
         </>
       )}
@@ -491,40 +615,40 @@ function Matchmaking({ players }: { players: GamePlayer[] }) {
     };
   }, []);
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6">
+    <div className="relative flex flex-1 flex-col items-center justify-center gap-6">
       <div className="relative grid size-28 place-items-center">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="absolute size-28 rounded-full border border-primary/60"
+            className="absolute size-28 rounded-full border border-[#c0392b]/50"
             style={{ animation: `sg-radar 2.1s ease-out ${i * 0.7}s infinite` }}
           />
         ))}
-        <Loader2 className="size-10 animate-spin text-primary" />
+        <Loader2 className="size-10 animate-spin text-[#c0392b]" />
       </div>
-      <p className="text-lg font-extrabold text-white">گەڕان بەدوای یاریزاندا…</p>
+      <p className="text-lg font-extrabold text-[#2c2c2c]">گەڕان بەدوای یاریزاندا…</p>
       <div className="flex gap-3">
         {players.map((p, i) => (
           <div
             key={p.id}
             className="flex flex-col items-center gap-1 transition-all duration-500"
-            style={{ opacity: i < found ? 1 : 0.2, transform: i < found ? "scale(1)" : "scale(.85)" }}
+            style={{ opacity: i < found ? 1 : 0.25, transform: i < found ? "scale(1)" : "scale(.85)" }}
           >
-            <div className="size-12 overflow-hidden rounded-full border-2" style={{ borderColor: p.color.from }}>
+            <div className="size-12 overflow-hidden rounded-full border-2 bg-white" style={{ borderColor: p.color.from }}>
               <img src={p.avatar} alt={p.name} className="size-full object-cover" />
             </div>
-            <span className="max-w-14 truncate text-[10px] font-semibold text-white/80">{p.name}</span>
+            <span className="max-w-14 truncate text-[10px] font-semibold text-[#5c5140]">{p.name}</span>
           </div>
         ))}
       </div>
-      <p className="text-xs text-white/50">{found}/4 یاریزان ئامادەن</p>
+      <p className="text-xs text-[#8a7c66]">{found}/4 یاریزان ئامادەن</p>
     </div>
   );
 }
 
 function WinOverlay({ winner, onClose }: { winner: GamePlayer; onClose: () => void }) {
   return (
-    <div className="absolute inset-0 z-50 grid place-items-center bg-black/70 px-6">
+    <div className="absolute inset-0 z-50 grid place-items-center bg-black/60 px-6">
       <Confetti />
       <div className="animate-soft-in w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl">
         <div
@@ -539,7 +663,7 @@ function WinOverlay({ winner, onClose }: { winner: GamePlayer; onClose: () => vo
         <p className="mt-1 text-sm text-neutral-600">{winner.name} گەیشتە خانەی ١٠٠</p>
         <button
           onClick={onClose}
-          className="press mt-5 w-full rounded-2xl bg-primary py-3 font-bold text-primary-foreground"
+          className="press mt-5 w-full rounded-2xl bg-[#c0392b] py-3 font-bold text-white"
         >
           گەڕانەوە
         </button>
