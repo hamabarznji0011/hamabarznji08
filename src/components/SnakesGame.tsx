@@ -27,7 +27,7 @@ const CELL_WHITE = "#f6f5ef";
 /* ---------------------------------- board --------------------------------- */
 
 function BoardGrid() {
-  const rows = Array.from({ length: BOARD_SIZE }, (_, i) => BOARD_SIZE - 1 - i); // top row first
+  const rows = Array.from({ length: BOARD_SIZE }, (_, i) => BOARD_SIZE - 1 - i);
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[14px]">
       {rows.map((row) => {
@@ -73,7 +73,6 @@ const pt = (n: number) => {
   return { x: 100 - c.x, y: 100 - c.y };
 };
 
-
 function Ladders() {
   return (
     <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
@@ -90,12 +89,11 @@ function Ladders() {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
-        const nx = (-dy / len) * 2.6;
-        const ny = (dx / len) * 2.6;
+        const nx = (-dy / len) * 1.2;
+        const ny = (dx / len) * 1.2;
         const rungs = Math.max(3, Math.round(len / 7));
         return (
           <g key={`l-${from}`} strokeLinecap="round">
-            {/* rungs behind rails */}
             {Array.from({ length: rungs }, (_, i) => {
               const t = (i + 0.5) / rungs;
               const cx = a.x + dx * t;
@@ -108,15 +106,15 @@ function Ladders() {
                     x2={cx - nx}
                     y2={cy - ny}
                     stroke="#7d1a14"
-                    strokeWidth="1.5"
+                    strokeWidth="0.8"
                   />
                   <line
                     x1={cx + nx}
-                    y1={cy + ny - 0.35}
+                    y1={cy + ny - 0.2}
                     x2={cx - nx}
-                    y2={cy - ny - 0.35}
+                    y2={cy - ny - 0.2}
                     stroke="#f5776a"
-                    strokeWidth="0.7"
+                    strokeWidth="0.4"
                   />
                 </g>
               );
@@ -127,7 +125,7 @@ function Ladders() {
               x2={b.x + nx}
               y2={b.y + ny}
               stroke="url(#sg-rail)"
-              strokeWidth="1.7"
+              strokeWidth="0.8"
             />
             <line
               x1={a.x - nx}
@@ -135,7 +133,7 @@ function Ladders() {
               x2={b.x - nx}
               y2={b.y - ny}
               stroke="url(#sg-rail)"
-              strokeWidth="1.7"
+              strokeWidth="0.8"
             />
           </g>
         );
@@ -154,8 +152,8 @@ function Snakes() {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
-        const ox = (-dy / len) * 11;
-        const oy = (dx / len) * 11;
+        const ox = (-dy / len) * 5;
+        const oy = (dx / len) * 5;
         const p1 = { x: a.x + dx * 0.3 + ox, y: a.y + dy * 0.3 + oy };
         const p2 = { x: a.x + dx * 0.7 - ox, y: a.y + dy * 0.7 - oy };
         const d = `M ${a.x} ${a.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${b.x} ${b.y}`;
@@ -166,19 +164,19 @@ function Snakes() {
             key={`s-${head}`}
             style={{ animation: `sg-slither 6s ease-in-out ${idx * 0.4}s infinite`, transformOrigin: `${a.x}% ${a.y}%` }}
           >
-            <path d={d} stroke="rgba(0,0,0,.16)" strokeWidth="4.6" fill="none" strokeLinecap="round" transform="translate(0.5,0.7)" />
-            <path d={d} stroke={c.dark} strokeWidth="4.4" fill="none" strokeLinecap="round" />
-            <path d={d} stroke={c.body} strokeWidth="3.4" fill="none" strokeLinecap="round" />
-            <path d={d} stroke={c.belly} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity="0.55" />
+            <path d={d} stroke="rgba(0,0,0,.16)" strokeWidth="2.5" fill="none" strokeLinecap="round" transform="translate(0.5,0.7)" />
+            <path d={d} stroke={c.dark} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+            <path d={d} stroke={c.body} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <path d={d} stroke={c.belly} strokeWidth="0.6" fill="none" strokeLinecap="round" opacity="0.55" />
             {/* head */}
-            <circle cx={hx} cy={hy} r="3.2" fill={c.body} stroke={c.dark} strokeWidth="0.6" />
-            <circle cx={hx - 1.2} cy={hy - 0.9} r="1.15" fill="#fff" />
-            <circle cx={hx + 1.2} cy={hy - 0.9} r="1.15" fill="#fff" />
-            <circle cx={hx - 1.2} cy={hy - 0.9} r="0.5" fill="#111">
-              <animate attributeName="cy" values={`${hy - 0.9};${hy - 0.4};${hy - 0.9}`} dur="3s" repeatCount="indefinite" />
+            <circle cx={hx} cy={hy} r="1.6" fill={c.body} stroke={c.dark} strokeWidth="0.4" />
+            <circle cx={hx - 0.6} cy={hy - 0.5} r="0.55" fill="#fff" />
+            <circle cx={hx + 0.6} cy={hy - 0.5} r="0.55" fill="#fff" />
+            <circle cx={hx - 0.6} cy={hy - 0.5} r="0.25" fill="#111">
+              <animate attributeName="cy" values={`${hy - 0.5};${hy - 0.3};${hy - 0.5}`} dur="3s" repeatCount="indefinite" />
             </circle>
-            <circle cx={hx + 1.2} cy={hy - 0.9} r="0.5" fill="#111">
-              <animate attributeName="cy" values={`${hy - 0.9};${hy - 0.4};${hy - 0.9}`} dur="3s" repeatCount="indefinite" />
+            <circle cx={hx + 0.6} cy={hy - 0.5} r="0.25" fill="#111">
+              <animate attributeName="cy" values={`${hy - 0.5};${hy - 0.3};${hy - 0.5}`} dur="3s" repeatCount="indefinite" />
             </circle>
           </g>
         );
@@ -198,7 +196,7 @@ function Token({ player, offset }: { player: GamePlayer; offset: number }) {
   ][offset] ?? [0, 0];
   return (
     <div
-      className="absolute size-[7%] -translate-x-1/2 translate-y-1/2 rounded-full border-2"
+      className="absolute size-[5.5%] -translate-x-1/2 translate-y-1/2 rounded-full border-[1.5px]"
       style={{
         left: `${100 - (c.x + spread[0]!)}%`,
         bottom: `${c.y + spread[1]!}%`,
@@ -447,7 +445,7 @@ export function SnakesGame({
   return (
     <div
       dir="rtl"
-      className="animate-soft-in fixed inset-0 z-50 mx-auto flex max-w-md flex-col overflow-hidden px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      className="animate-soft-in fixed inset-0 z-50 mx-auto flex w-full max-w-2xl flex-col overflow-y-auto overflow-x-hidden px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
       style={{
         background:
           "radial-gradient(120% 80% at 50% 0%, #f7ecd9 0%, #f1e2c8 55%, #e9d9bd 100%)",
@@ -470,7 +468,7 @@ export function SnakesGame({
       </div>
 
       {/* top bar */}
-      <div className="relative flex items-center justify-between">
+      <div className="relative flex items-center justify-between mt-2">
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
@@ -492,7 +490,7 @@ export function SnakesGame({
       ) : (
         <>
           {/* opponents */}
-          <div className="relative mt-3 grid grid-cols-3 gap-2">
+          <div className="relative mt-4 grid grid-cols-3 gap-3">
             {opponents.map((p) => {
               const active = players[turn]?.id === p.id;
               return (
@@ -504,15 +502,15 @@ export function SnakesGame({
                     animation: active ? "sg-pulse 1.3s ease-in-out infinite" : undefined,
                   }}
                 >
-                  <div className="relative mx-auto size-10">
-                    <img src={p.avatar} alt={p.name} className="size-10 rounded-full object-cover" />
+                  <div className="relative mx-auto size-10 md:size-12">
+                    <img src={p.avatar} alt={p.name} className="size-full rounded-full object-cover" />
                     <span
                       className="absolute -bottom-0.5 -left-0.5 size-3 rounded-full border-2 border-white"
                       style={{ background: p.color.from }}
                     />
                   </div>
-                  <p className="mt-1 truncate text-[11px] font-bold text-[#2c2c2c]">{p.name}</p>
-                  <span className="mt-1 inline-block rounded-full bg-[#f4f1e6] px-2 py-0.5 text-[10px] font-bold text-[#8a6d1f]">
+                  <p className="mt-1.5 truncate text-[12px] font-bold text-[#2c2c2c]">{p.name}</p>
+                  <span className="mt-1 inline-block rounded-full bg-[#f4f1e6] px-2 py-0.5 text-[10px] md:text-xs font-bold text-[#8a6d1f]">
                     {p.position}
                   </span>
                 </div>
@@ -523,7 +521,7 @@ export function SnakesGame({
           {/* board */}
           <div
             dir="ltr"
-            className="relative mt-3 aspect-square w-full rounded-[16px] p-[3px]"
+            className="relative mt-4 aspect-square w-full rounded-[16px] p-[3px] md:p-1"
             style={{ background: "#ffffff", boxShadow: "0 14px 30px rgba(0,0,0,.18)" }}
           >
             <div className="relative size-full">
@@ -536,10 +534,10 @@ export function SnakesGame({
             </div>
           </div>
 
-          <p className="mt-1.5 h-5 text-center text-[11px] font-bold text-[#6b5a3e]">{status}</p>
+          <p className="mt-3 h-5 text-center text-xs font-bold text-[#6b5a3e]">{status}</p>
 
           {/* dice */}
-          <div className="relative mt-1 flex items-center justify-center">
+          <div className="relative mt-2 flex items-center justify-center">
             <button
               onClick={() => void takeTurn(turn)}
               disabled={!myTurn}
@@ -559,7 +557,7 @@ export function SnakesGame({
           </div>
 
           {/* reactions */}
-          <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
+          <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-2">
             {REACTIONS.map((r) => (
               <button
                 key={r}
@@ -567,7 +565,7 @@ export function SnakesGame({
                   setReaction(r);
                   setTimeout(() => setReaction(null), 1800);
                 }}
-                className="press shrink-0 rounded-full border border-[#8cc06a]/50 bg-[#8cc06a]/25 px-4 py-2 text-sm font-bold text-[#33502a] backdrop-blur-sm"
+                className="press shrink-0 rounded-full border border-[#8cc06a]/50 bg-[#8cc06a]/25 px-5 py-2.5 text-sm md:text-base font-bold text-[#33502a] backdrop-blur-sm"
               >
                 {r}
               </button>
@@ -575,22 +573,22 @@ export function SnakesGame({
           </div>
 
           {/* my bar */}
-          <div className="mt-2 flex items-center gap-3 rounded-2xl border-2 border-[#c0392b] bg-white p-2 shadow-[0_8px_18px_rgba(0,0,0,.12)]">
+          <div className="mt-4 mb-4 flex items-center gap-4 rounded-2xl border-2 border-[#c0392b] bg-white p-3 shadow-[0_8px_18px_rgba(0,0,0,.12)]">
             <img
               src={meP.avatar}
               alt={meP.name}
-              className="size-11 rounded-full border-2 border-[#c0392b] object-cover"
+              className="size-12 md:size-14 rounded-full border-2 border-[#c0392b] object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-extrabold text-[#2c2c2c]">{meP.name}</p>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#eee8dc]">
+              <p className="truncate text-base font-extrabold text-[#2c2c2c]">{meP.name}</p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#eee8dc]">
                 <div
                   className="h-full rounded-full bg-[#c0392b] transition-all duration-300"
                   style={{ width: `${meP.position}%` }}
                 />
               </div>
             </div>
-            <span className="rounded-full bg-[#f4f1e6] px-2.5 py-1 text-xs font-bold text-[#8a6d1f]">
+            <span className="rounded-full bg-[#f4f1e6] px-3 py-1 text-sm font-bold text-[#8a6d1f]">
               {meP.position}/100
             </span>
           </div>
@@ -626,22 +624,22 @@ function Matchmaking({ players }: { players: GamePlayer[] }) {
         ))}
         <Loader2 className="size-10 animate-spin text-[#c0392b]" />
       </div>
-      <p className="text-lg font-extrabold text-[#2c2c2c]">گەڕان بەدوای یاریزاندا…</p>
-      <div className="flex gap-3">
+      <p className="text-lg md:text-xl font-extrabold text-[#2c2c2c]">گەڕان بەدوای یاریزاندا…</p>
+      <div className="flex gap-4">
         {players.map((p, i) => (
           <div
             key={p.id}
-            className="flex flex-col items-center gap-1 transition-all duration-500"
+            className="flex flex-col items-center gap-2 transition-all duration-500"
             style={{ opacity: i < found ? 1 : 0.25, transform: i < found ? "scale(1)" : "scale(.85)" }}
           >
-            <div className="size-12 overflow-hidden rounded-full border-2 bg-white" style={{ borderColor: p.color.from }}>
+            <div className="size-14 overflow-hidden rounded-full border-2 bg-white" style={{ borderColor: p.color.from }}>
               <img src={p.avatar} alt={p.name} className="size-full object-cover" />
             </div>
-            <span className="max-w-14 truncate text-[10px] font-semibold text-[#5c5140]">{p.name}</span>
+            <span className="max-w-16 md:max-w-20 truncate text-[11px] md:text-xs font-semibold text-[#5c5140]">{p.name}</span>
           </div>
         ))}
       </div>
-      <p className="text-xs text-[#8a7c66]">{found}/4 یاریزان ئامادەن</p>
+      <p className="text-sm text-[#8a7c66]">{found}/4 یاریزان ئامادەن</p>
     </div>
   );
 }
@@ -650,20 +648,20 @@ function WinOverlay({ winner, onClose }: { winner: GamePlayer; onClose: () => vo
   return (
     <div className="absolute inset-0 z-50 grid place-items-center bg-black/60 px-6">
       <Confetti />
-      <div className="animate-soft-in w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl">
+      <div className="animate-soft-in w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
         <div
-          className="mx-auto size-20 overflow-hidden rounded-full border-4"
+          className="mx-auto size-24 overflow-hidden rounded-full border-4"
           style={{ borderColor: winner.color.from }}
         >
           <img src={winner.avatar} alt={winner.name} className="size-full object-cover" />
         </div>
-        <h3 className="mt-3 text-2xl font-extrabold text-neutral-900">
+        <h3 className="mt-4 text-3xl font-extrabold text-neutral-900">
           {winner.isHuman ? "تۆ بردتەوە! 🎉" : "یاری تەواو بوو"}
         </h3>
-        <p className="mt-1 text-sm text-neutral-600">{winner.name} گەیشتە خانەی ١٠٠</p>
+        <p className="mt-2 text-base text-neutral-600">{winner.name} گەیشتە خانەی ١٠٠</p>
         <button
           onClick={onClose}
-          className="press mt-5 w-full rounded-2xl bg-[#c0392b] py-3 font-bold text-white"
+          className="press mt-6 w-full rounded-2xl bg-[#c0392b] py-4 text-lg font-bold text-white"
         >
           گەڕانەوە
         </button>
