@@ -1,16 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { ArrowRight, Dices, Volume2, Sticker, LayoutGrid, User, Settings, Plus } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowRight, Dices, Volume2, Sticker, LayoutGrid, User, Settings, Play } from "lucide-react";
 import { boardById, boards as defaultBoards, tokenById, tokens as defaultTokens } from "@/lib/game-data";
 import { BoardArt, TokenArt } from "@/components/skins";
 import { useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
 import { SnakesGame } from "@/components/SnakesGame";
+import { AdminPanel } from "@/components/AdminPanel";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// شوێنێک بۆ خەزنکردنی دەنگەکان لە میمۆری تا بێ دواکەوتن لێبدەن
+const audioCache: Record<string, any> = {};
 
 export const Route = createFileRoute("/app/play")({
   head: () => ({
@@ -29,6 +33,14 @@ function PlayTab() {
 
   const [dbSounds, setDbSounds] = useState<any[]>([]);
   const [dbStickers, setDbStickers] = useState<any[]>([]);
+  const [dbBoards, setDbBoards] = useState<any[]>([]);
+  const [dbTokens, setDbTokens] = useState<any[]>([]);
+
+  // هەڵبژاردنە ناوخۆییەکان بۆ سەکۆکان
+  const [selectedSoundId, setSelectedSoundId] = useState<string | null>(null);
+  
+  // گۆڕینی State بۆ Array تاوەکو تا ٥ ستیکەر هەڵبگرێت
+  const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -37,8 +49,23 @@ function PlayTab() {
   const fetchData = async () => {
     const { data: sounds } = await supabase.from("sounds").select("*");
     const { data: stickers } = await supabase.from("stickers").select("*");
-    if (sounds) setDbSounds(sounds);
+    const { data: boards } = await supabase.from("boards").select("*");
+    const { data: tokens } = await supabase.from("tokens").select("*");
+    
+    if (sounds) {
+      setDbSounds(sounds);
+      // لێرەدا دەنگەکان پێشوەختە دادەبەزێنینە ناو میمۆری (Preload)
+      sounds.forEach((s) => {
+        if (!audioCache[s.id] && s.audio_url) {
+          const audio = new Audio(s.audio_url);
+          audio.preload = "auto";
+          audioCache[s.id] = audio;
+        }
+      });
+    }
     if (stickers) setDbStickers(stickers);
+    if (boards) setDbBoards(boards);
+    if (tokens) setDbTokens(tokens);
   };
 
   const board = boardById(boardId);
@@ -102,10 +129,26 @@ function PlayTab() {
         </div>
       </div>
 
-      {overlay === "token" && <TokenPicker onClose={() => setOverlay(null)} />}
-      {overlay === "board" && <BoardPicker onClose={() => setOverlay(null)} />}
-      {overlay === "sound" && <SoundList items={dbSounds} onClose={() => setOverlay(null)} />}
-      {overlay === "sticker" && <StickerList items={dbStickers} onClose={() => setOverlay(null)} />}
+      {overlay === "token" && <TokenPicker customTokens={dbTokens} onClose={() => setOverlay(null)} />}
+      {overlay === "board" && <BoardPicker customBoards={dbBoards} onClose={() => setOverlay(null)} />}
+      {overlay === "sound" && <SoundList items={dbSounds} selectedId={selectedSoundId} onSelect={setSelectedSoundId} onClose={() => setOverlay(null)} />}
+      {overlay === "sticker" && (
+        <StickerList 
+          items={dbStickers} 
+          selectedIds={selectedStickerIds} 
+          onToggle={(id) => {
+            setSelectedStickerIds(prev => {
+              // ئەگەر پێشتر هەڵبژێردرابوو، لایبە (Deselect)
+              if (prev.includes(id)) return prev.filter(i => i !== id);
+              // ئەگەر گەیشتبووە ٥ دانە، ڕێگە مەدە زیاتر هەڵبژێرێت
+              if (prev.length >= 5) return prev;
+              // ئەگەرنا، زیادی بکە بۆ لیستەکە
+              return [...prev, id];
+            });
+          }} 
+          onClose={() => setOverlay(null)} 
+        />
+      )}
       {overlay === "admin" && <AdminPanel onClose={() => { setOverlay(null); fetchData(); }} />}
       
       {playing && (
@@ -135,7 +178,24 @@ function OverlayShell({ title, onClose, children }: { title: string; onClose: ()
   );
 }
 
-function TokenPicker({ onClose }: { onClose: () => void }) {
+function MediaDisplay({ url, alt }: { url: string; alt: string }) {
+  const isVideo = url?.endsWith(".mp4") || url?.endsWith(".webm");
+  if (isVideo) {
+    return (
+      <video
+        src={url}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="w-full h-full object-cover rounded-xl"
+      />
+    );
+  }
+  return <img src={url} alt={alt} className="w-full h-full object-cover rounded-xl" />;
+}
+
+function TokenPicker({ customTokens, onClose }: { customTokens: any[]; onClose: () => void }) {
   const { tokenId, setTokenId } = useApp();
   return (
     <OverlayShell title="پوولەکان" onClose={onClose}>
@@ -152,12 +212,27 @@ function TokenPicker({ onClose }: { onClose: () => void }) {
             <span className="text-[11px] font-semibold">{t.name}</span>
           </button>
         ))}
+
+        {customTokens.map((ct) => (
+          <button
+            key={ct.id}
+            onClick={() => setTokenId(ct.id)}
+            className={`press flex flex-col items-center gap-1 rounded-2xl border-2 bg-input p-3 transition-all ${
+              tokenId === ct.id ? "border-primary shadow-[var(--shadow-glow)]" : "border-transparent"
+            }`}
+          >
+            <div className="size-16 overflow-hidden rounded-xl bg-black/10 flex items-center justify-center">
+              <MediaDisplay url={ct.image_url} alt={ct.name} />
+            </div>
+            <span className="text-[11px] font-semibold">{ct.name}</span>
+          </button>
+        ))}
       </div>
     </OverlayShell>
   );
 }
 
-function BoardPicker({ onClose }: { onClose: () => void }) {
+function BoardPicker({ customBoards, onClose }: { customBoards: any[]; onClose: () => void }) {
   const { boardId, setBoardId } = useApp();
   return (
     <OverlayShell title="تەختەکان" onClose={onClose}>
@@ -174,12 +249,71 @@ function BoardPicker({ onClose }: { onClose: () => void }) {
             <span className="text-[11px] font-semibold">{b.name}</span>
           </button>
         ))}
+
+        {customBoards.map((cb) => (
+          <button
+            key={cb.id}
+            onClick={() => setBoardId(cb.id)}
+            className={`press flex flex-col items-center gap-2 rounded-2xl border-2 bg-input p-3 transition-all ${
+              boardId === cb.id ? "border-primary shadow-[var(--shadow-glow)]" : "border-transparent"
+            }`}
+          >
+            <div className="w-full h-24 overflow-hidden rounded-xl bg-black/10 flex items-center justify-center">
+              <MediaDisplay url={cb.image_url} alt={cb.name} />
+            </div>
+            <span className="text-[11px] font-semibold">{cb.name}</span>
+          </button>
+        ))}
       </div>
     </OverlayShell>
   );
 }
 
-function SoundList({ items, onClose }: { items: any[]; onClose: () => void }) {
+function SoundList({ items, selectedId, onSelect, onClose }: { items: any[]; selectedId: string | null; onSelect: (id: string) => void; onClose: () => void }) {
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  const handlePlay = (s: any) => {
+    onSelect(s.id);
+
+    // ١. ئەگەر کلیک لە هەمان ئەو دەنگە کرا کە ئێستا لێدەدات، بیوەستێنە
+    if (playingId === s.id && currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      setPlayingId(null);
+      currentAudioRef.current = null;
+      return; 
+    }
+
+    // ٢. ئەگەر دەنگێکی تر لێیدەدا، سەرەتا ئەوەی پێشوو بوەستێنە
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+    }
+
+    // ٣. دەنگەکە لە ناو میمۆرییەوە ڕابکێشە (تا بێ دواکەوتن لێبدات)
+    let audio = audioCache[s.id];
+    if (!audio) {
+      audio = new Audio(s.audio_url);
+      audio.preload = "auto";
+      audioCache[s.id] = audio;
+    }
+
+    // ٤. دەنگە نوێیەکە لێبدە
+    currentAudioRef.current = audio;
+    audio.currentTime = 0; 
+    audio.play().catch(() => {});
+    setPlayingId(s.id);
+
+    // ٥. کاتێک دەنگەکە تەواو بوو، نیشانەی لێدانەکە لابدە
+    audio.onended = () => {
+      setPlayingId(null);
+      if (currentAudioRef.current === audio) {
+        currentAudioRef.current = null;
+      }
+    };
+  };
+
   return (
     <OverlayShell title="ساوندەکان" onClose={onClose}>
       {items.length === 0 ? (
@@ -188,107 +322,86 @@ function SoundList({ items, onClose }: { items: any[]; onClose: () => void }) {
           <p className="text-xl font-bold text-muted-foreground">چاوەڕێی ساوند بە...</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {items.map((s) => (
-            <div key={s.id} className="glass p-3 rounded-xl flex items-center justify-between">
-              <span className="font-semibold">{s.name}</span>
-              <audio controls src={s.audio_url} className="h-8 w-40" />
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3 pb-6">
+          {items.map((s) => {
+            const isSelected = selectedId === s.id;
+            const isPlaying = playingId === s.id;
+            return (
+              <div
+                key={s.id}
+                onClick={() => handlePlay(s)}
+                className={`press flex flex-col items-center justify-between gap-2 rounded-2xl border-2 bg-input p-3 cursor-pointer transition-all ${
+                  isSelected ? "border-primary shadow-[var(--shadow-glow)] bg-primary/10" : "border-transparent"
+                }`}
+              >
+                <div className="flex size-12 items-center justify-center rounded-full bg-primary/20 text-primary">
+                  <Play className={`size-6 fill-current ${isPlaying ? "animate-pulse" : ""}`} />
+                </div>
+                <span className="text-xs font-bold text-center truncate w-full">{s.name}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </OverlayShell>
   );
 }
 
-function StickerList({ items, onClose }: { items: any[]; onClose: () => void }) {
+function StickerList({ items, selectedIds, onToggle, onClose }: { items: any[]; selectedIds: string[]; onToggle: (id: string) => void; onClose: () => void }) {
+  // فلتەرکردنی ستیکەرە هەڵبژێراوەکان بۆ ناو Containerـەکەی سەرەوە
+  const selectedStickers = selectedIds.map(id => items.find(i => i.id === id)).filter(Boolean);
+
   return (
     <OverlayShell title="ستیکەرەکان" onClose={onClose}>
+      
+      {/* Container بۆ نیشاندانی ستیکەرە هەڵبژێراوەکان */}
+      <div className="mb-6 flex min-h-[4.5rem] items-center gap-2 overflow-x-auto no-scrollbar rounded-2xl border-2 border-dashed border-primary/30 bg-black/5 p-2">
+        {selectedStickers.length > 0 ? (
+          selectedStickers.map(st => (
+            <div 
+              key={st.id} 
+              onClick={() => onToggle(st.id)}
+              className="relative size-14 shrink-0 cursor-pointer overflow-hidden rounded-xl border-2 border-green-500 bg-black/10 shadow-[0_0_8px_rgba(34,197,94,0.4)] transition-transform active:scale-95"
+            >
+              <MediaDisplay url={st.image_url} alt={st.name} />
+            </div>
+          ))
+        ) : (
+          <span className="m-auto block w-full text-center text-xs font-medium text-muted-foreground">
+            هیچ ستیکەرێک هەڵنەبژێراوە (تا ٥ دانە)
+          </span>
+        )}
+      </div>
+
+      {/* لیستی هەموو ستیکەرەکان */}
       {items.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center gap-4 text-center">
           <Sticker className="size-16 text-muted-foreground/50" />
           <p className="text-xl font-bold text-muted-foreground">چاوەڕێی ستیکەر بە...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-3">
-          {items.map((st) => (
-            <div key={st.id} className="glass p-2 rounded-xl flex flex-col items-center gap-1">
-              <img src={st.image_url} alt={st.name} className="size-16 object-contain" />
-              <span className="text-xs font-semibold">{st.name}</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3 pb-6">
+          {items.map((st) => {
+            const isSelected = selectedIds.includes(st.id);
+            return (
+              <div
+                key={st.id}
+                onClick={() => onToggle(st.id)}
+                className={`press flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 p-3 transition-all ${
+                  isSelected 
+                    ? "border-green-500 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
+                    : "border-transparent bg-input"
+                }`}
+              >
+                <div className="flex size-20 items-center justify-center overflow-hidden rounded-xl bg-black/10">
+                  <MediaDisplay url={st.image_url} alt={st.name} />
+                </div>
+                <span className="w-full truncate text-center text-xs font-semibold">{st.name}</span>
+              </div>
+            );
+          })}
         </div>
       )}
-    </OverlayShell>
-  );
-}
-
-function AdminPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"sounds" | "stickers">("sounds");
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleAdd = async () => {
-    if (!name || !url) return alert("تکایە ناو و لینک بنووسە");
-    setLoading(true);
-
-    if (tab === "sounds") {
-      await supabase.from("sounds").insert([{ name, audio_url: url }]);
-    } else {
-      await supabase.from("stickers").insert([{ name, image_url: url }]);
-    }
-
-    setLoading(false);
-    setName("");
-    setUrl("");
-    alert("بە سەرکەوتوویی زیادکرا!");
-  };
-
-  return (
-    <OverlayShell title="بەڕێوەبەری ئادمین" onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <div className="flex gap-2 border-b border-border pb-2">
-          <button
-            onClick={() => setTab("sounds")}
-            className={`flex-1 py-2 font-bold rounded-xl ${tab === "sounds" ? "bg-primary text-primary-foreground" : "glass"}`}
-          >
-            ساوند
-          </button>
-          <button
-            onClick={() => setTab("stickers")}
-            className={`flex-1 py-2 font-bold rounded-xl ${tab === "stickers" ? "bg-primary text-primary-foreground" : "glass"}`}
-          >
-            ستیکەر
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3 glass p-4 rounded-2xl">
-          <h3 className="font-bold">زیادکردنی {tab === "sounds" ? "ساوندی" : "ستیکەری"} نوێ</h3>
-          <input
-            type="text"
-            placeholder="ناو"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="p-3 rounded-xl bg-input border border-border text-sm"
-          />
-          <input
-            type="text"
-            placeholder={tab === "sounds" ? "لینکی فایلی دەنگ (URL)" : "لینکی وێنە (URL)"}
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="p-3 rounded-xl bg-input border border-border text-sm"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={loading}
-            className="press mt-2 flex items-center justify-center gap-2 rounded-xl bg-primary py-3 font-bold text-primary-foreground"
-          >
-            <Plus className="size-5" />
-            {loading ? "چاوەڕێ بە..." : "زیادکردن"}
-          </button>
-        </div>
-      </div>
     </OverlayShell>
   );
 }
