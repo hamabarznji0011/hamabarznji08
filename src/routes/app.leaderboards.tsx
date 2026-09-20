@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { Crown, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { globalPlayers, useApp, type Player } from "@/lib/app-store";
 import { GoldPill } from "@/components/GoldCounter";
@@ -29,7 +29,7 @@ const tabs: { id: Tab; label: string }[] = [
 const ROW = 68;
 
 function LeaderboardsTab() {
-  const { visibleFriends, user, gold } = useApp();
+  const { visibleFriends, user, gold, isProMember, equippedProFrame } = useApp();
   const [tab, setTab] = useState<Tab>("points");
   const [selected, setSelected] = useState<Player | null>(null);
   const [drift, setDrift] = useState<Record<string, { points: number; gold: number }>>({});
@@ -109,7 +109,7 @@ function LeaderboardsTab() {
           >
             <span className="w-6 text-center text-sm font-extrabold text-primary">{i + 1}</span>
             {p.avatar ? (
-              <img src={p.avatar} alt={p.name} className="size-9 rounded-full bg-secondary" />
+              <img src={p.avatar} alt={p.name} className={`size-9 rounded-full bg-secondary ${p.id === "me" && isProMember && equippedProFrame ? "border-2 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,.8)]" : ""}`} />
             ) : (
               <span className="size-9 rounded-full bg-secondary" />
             )}
@@ -117,7 +117,8 @@ function LeaderboardsTab() {
               onClick={() => setSelected(p)}
               className="press flex-1 text-right font-bold"
             >
-              {p.name}
+              <span className={p.id === "me" && isProMember ? "bg-gradient-to-r from-yellow-200 to-amber-600 bg-clip-text text-transparent" : ""}>{p.name}</span>
+              {p.id === "me" && isProMember && <Crown className="mr-1 inline size-3 text-yellow-500" />}
               {p.id === "me" && <span className="mr-2 text-xs text-primary">(تۆ)</span>}
             </button>
             <span className="text-sm font-bold tabular-nums text-gold transition-all duration-500">

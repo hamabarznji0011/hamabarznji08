@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { ArrowRight, Check, LogOut, Menu, Pencil, ShieldBan, Trash2, UserX } from "lucide-react";
+import { ArrowRight, Check, Crown, LogOut, Menu, Pencil, ShieldBan, Trash2, UserX } from "lucide-react";
 import { NAME_MAX, useApp } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
 
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/app/profile")({
 });
 
 function ProfileTab() {
-  const { user, gold } = useApp();
+  const { user, gold, isProMember, equippedProFrame, equippedProBanner, setProFrame, setProBanner } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -31,14 +31,18 @@ function ProfileTab() {
         <Menu className="size-5" />
       </button>
 
-      <div className="glass-strong animate-rise-in flex flex-col items-center rounded-3xl p-6">
+      <div
+        className={`glass-strong animate-rise-in relative flex flex-col items-center overflow-hidden rounded-3xl p-6 ${isProMember ? "border-2 border-yellow-300/80 shadow-[0_0_28px_rgba(250,204,21,.35)]" : ""}`}
+        style={isProMember && equippedProBanner ? { backgroundImage: "radial-gradient(circle at 20% 10%, rgba(255,239,150,.42), transparent 28%), linear-gradient(135deg, rgba(20,20,10,.9), rgba(130,82,10,.7))" } : undefined}
+      >
         <img
           src={user?.avatar}
           alt={user?.name ?? "پرۆفایل"}
-          className="size-24 rounded-full border-2 border-primary/60 bg-secondary"
+          className={`size-24 rounded-full bg-secondary ${isProMember && equippedProFrame ? "border-4 border-yellow-300 shadow-[0_0_24px_rgba(250,204,21,.8)]" : "border-2 border-primary/60"}`}
         />
         <div className="mt-3 flex items-center gap-2">
-          <h1 className="text-2xl font-extrabold">{user?.name ?? "یاریزان"}</h1>
+          <h1 className={`text-2xl font-extrabold ${isProMember ? "bg-gradient-to-r from-yellow-200 via-yellow-500 to-amber-700 bg-clip-text text-transparent" : ""}`}>{user?.name ?? "یاریزان"}</h1>
+          {isProMember && <span className="flex items-center gap-1 rounded-full bg-yellow-300 px-2 py-1 text-[10px] font-black text-yellow-950"><Crown className="size-3" /> PRO</span>}
           <button
             onClick={() => setEditOpen(true)}
             aria-label="دەستکاری پرۆفایل"
@@ -49,6 +53,20 @@ function ProfileTab() {
         </div>
         <p className="text-xs text-muted-foreground">هەژماری یاریزان</p>
       </div>
+
+      {isProMember && (
+        <div className="glass mt-4 rounded-2xl border border-yellow-300/40 p-4">
+          <p className="text-sm font-black text-yellow-500">ڕێکخستنی VIP</p>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => setProFrame(equippedProFrame ? null : "golden-shimmer")} className="press flex-1 rounded-xl border border-yellow-400/50 bg-yellow-400/15 px-3 py-2 text-xs font-bold text-yellow-500">
+              {equippedProFrame ? "لابردنی فریم" : "چالاککردنی فریم"}
+            </button>
+            <button onClick={() => setProBanner(equippedProBanner ? null : "vip-aurora")} className="press flex-1 rounded-xl border border-yellow-400/50 bg-yellow-400/15 px-3 py-2 text-xs font-bold text-yellow-500">
+              {equippedProBanner ? "لابردنی بانەر" : "چالاککردنی بانەر"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Stat label="خاڵەکان" value={user?.points ?? 0} />

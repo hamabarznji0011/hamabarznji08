@@ -171,6 +171,40 @@
   }
 }
 
+@keyframes sticker-slot-shrink {
+  from {
+    opacity: 0.5;
+    transform: scale(1.45);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sticker-slot-unlocking {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+    box-shadow: 0 0 0 transparent;
+    transform: scale(1);
+  }
+  35% {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 18px 4px rgb(239 68 68 / 70%);
+    transform: scale(1.08);
+  }
+  68% {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 12px 2px rgb(239 68 68 / 55%);
+    transform: scale(1.03);
+  }
+}
+
+.sticker-slot-unlocking {
+  animation: sticker-slot-unlocking 1s cubic-bezier(.22, 1, .36, 1);
+}
+
 @keyframes shimmer {
   0% {
     background-position: 200% 0;

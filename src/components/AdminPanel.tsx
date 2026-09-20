@@ -12,6 +12,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"sounds" | "stickers" | "boards" | "tokens">("sounds");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [price, setPrice] = useState("");
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<any[]>([]);
 
@@ -29,9 +30,11 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     if (!name || !url) return alert("تکایە ناو و لینک بنووسە");
     setLoading(true);
 
+    const itemPrice = parseInt(price) || 0;
+
     const payload = tab === "sounds" 
-      ? { name, audio_url: url } 
-      : { name, image_url: url };
+      ? { name, audio_url: url, price: itemPrice } 
+      : { name, image_url: url, price: itemPrice };
 
     const { error } = await supabase.from(tab).insert([payload]);
     if (error) {
@@ -39,6 +42,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     } else {
       setName("");
       setUrl("");
+      setPrice("");
       fetchItems();
     }
     setLoading(false);
@@ -114,6 +118,14 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             onChange={(e) => setUrl(e.target.value)}
             className="p-3 rounded-xl bg-input border border-border text-sm"
           />
+          <input
+            type="number"
+            placeholder="نرخ بە زێڕ (نموونە: 100)"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="p-3 rounded-xl bg-input border border-border text-sm"
+            min="0"
+          />
           <button
             onClick={handleAdd}
             disabled={loading}
@@ -139,7 +151,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   ) : (
                     <img src={item.image_url} alt={item.name} className="size-10 object-contain rounded-lg shrink-0 bg-black/10" />
                   )}
-                  <span className="font-semibold text-sm truncate">{item.name}</span>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="font-semibold text-sm truncate">{item.name}</span>
+                    <span className="text-xs font-bold text-yellow-500 mt-0.5">
+                      {item.price || 0} زێڕ
+                    </span>
+                  </div>
                 </div>
 
                 <button

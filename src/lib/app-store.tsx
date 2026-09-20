@@ -13,6 +13,7 @@ export type Message = {
   senderId: string;
   text: string;
   at: number;
+  imageUrl?: string;
 };
 
 export type Friend = {
@@ -52,10 +53,13 @@ export type User = {
   wins: number;
 };
 
+type SavedAccount = { id: string; name: string };
+
 type State = {
   user: User | null;
-  savedAccount: { name: string } | null;
+  savedAccount: SavedAccount | null;
   gold: number;
+  unlockedStickerSlots: number[];
   online: boolean;
   friends: Friend[];
   friendRequests: Friend[];
@@ -67,12 +71,19 @@ type State = {
   tokenId: string;
   boardId: string;
   nameChangedAt: number | null;
+  isProMember: boolean;
+  equippedProFrame: string | null;
+  equippedProBanner: string | null;
+  dailyGoldClaimedDate: string | null;
 };
 
 export const NAME_MAX = 26;
 export const NAME_COOLDOWN_DAYS = 30;
 
-const STORAGE_KEY = "snakes_ladders_state_v1";
+export const userStorageKey = (userId: string, category: string) => `user_${userId}_${category}`;
+const ACTIVE_SESSION_KEY = "snakes_ladders_active_session";
+
+const accountIdFor = (name: string) => `account_${encodeURIComponent(name.trim().toLocaleLowerCase())}`;
 
 const avatarFor = (seed: string) =>
   `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(seed)}`;
@@ -117,7 +128,8 @@ export const globalPlayers: Player[] = [
 const seedState = (): State => ({
   user: null,
   savedAccount: null,
-  gold: 250,
+  gold: 75,
+  unlockedStickerSlots: [],
   online: true,
   friends: seedFriends,
   friendRequests: seedRequests,
@@ -155,6 +167,10 @@ const seedState = (): State => ({
   tokenId: "t1",
   boardId: "b1",
   nameChangedAt: null,
+  isProMember: false,
+  equippedProFrame: null,
+  equippedProBanner: null,
+  dailyGoldClaimedDate: null,
 });
 
 type Ctx = State & {
@@ -164,7 +180,9 @@ type Ctx = State & {
   logout: () => void;
   setOnline: (v: boolean) => void;
   addGold: (amount: number) => void;
-  sendDirect: (friendId: string, text: string) => void;
+  spendGold: (amount: number) => boolean;
+  unlockStickerSlot: (slotIndex: number) => boolean;
+  sendDirect: (friendId: string, text: string, imageUrl?: string) => void;
   sendGroup: (groupId: string, text: string) => void;
   markRead: (chatId: string) => void;
   unreadFor: (friendId: string) => number;
@@ -176,6 +194,9 @@ type Ctx = State & {
   joinGroupByCode: (code: string) => Group | null;
   setTokenId: (id: string) => void;
   setBoardId: (id: string) => void;
+  activatePro: () => boolean;
+  setProFrame: (frame: string | null) => void;
+  setProBanner: (banner: string | null) => void;
   visibleFriends: Friend[];
   blockedFriends: Friend[];
   playerById: (id: string) => Player | undefined;
@@ -191,38 +212,69 @@ type Ctx = State & {
 const AppContext = createContext<Ctx | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>(seedState);
-  const [hydrated, setHydrated] = useState(false);
+  const [state, setState] = useState<State>(() => {
+    if (typeof window === "undefined") return seedState();
+    try {
+      const userId = localStorage.getItem(ACTIVE_SESSION_KEY);
+      if (!userId) return seedState();
+      const raw = localStorage.getItem(userStorageKey(userId, "app_state"));
+      if (!raw) return seedState();
+      const stored = JSON.parse(raw) as Partial<State>;
+      return {
+        ...seedState(),
+        ...stored,
+        isProMember: localStorage.getItem(userStorageKey(userId, "isPro")) === "true" || stored.isProMember === true,
+        equippedProFrame: localStorage.getItem(userStorageKey(userId, "equippedProFrame")) ?? stored.equippedProFrame ?? null,
+        equippedProBanner: localStorage.getItem(userStorageKey(userId, "equippedProBanner")) ?? stored.equippedProBanner ?? null,
+        dailyGoldClaimedDate: localStorage.getItem(userStorageKey(userId, "dailyGoldClaimedDate")) ?? stored.dailyGoldClaimedDate ?? null,
+      };
+    } catch {
+      return seedState();
+    }
+  });
+  const [hydrated, setHydrated] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setState((prev) => ({ ...prev, ...(JSON.parse(raw) as State) }));
-    } catch {
-      /* ignore */
-    }
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
+    if (!state.user?.id) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(userStorageKey(state.user.id, "app_state"), JSON.stringify(state));
     } catch {
       /* ignore */
     }
   }, [state, hydrated]);
 
+  useEffect(() => {
+    if (!state.user?.id || !state.isProMember) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (state.dailyGoldClaimedDate === today) return;
+    setState((previous) => ({
+      ...previous,
+      gold: previous.gold + 20,
+      dailyGoldClaimedDate: today,
+    }));
+    localStorage.setItem(userStorageKey(state.user.id, "dailyGoldClaimedDate"), today);
+  }, [state.user?.id, state.isProMember, state.dailyGoldClaimedDate]);
+
   const patch = useCallback((fn: (prev: State) => State) => setState(fn), []);
 
   const value = useMemo<Ctx>(() => {
-    const visibleFriends = state.friends.filter((f) => !state.blockedIds.includes(f.id));
-    const blockedFriends = state.friends.filter((f) => state.blockedIds.includes(f.id));
+    const friends = Array.isArray(state.friends) ? state.friends : [];
+    const blockedIds = Array.isArray(state.blockedIds) ? state.blockedIds : [];
+    const directMessages = state.directMessages && typeof state.directMessages === "object" ? state.directMessages : {};
+    const readAt = state.readAt && typeof state.readAt === "object" ? state.readAt : {};
+    const groups = Array.isArray(state.groups) ? state.groups : [];
+    const visibleFriends = friends.filter((f) => f?.id && !blockedIds.includes(f.id));
+    const blockedFriends = friends.filter((f) => f?.id && blockedIds.includes(f.id));
 
     const unreadFor = (friendId: string) => {
-      if (state.blockedIds.includes(friendId)) return 0;
-      const last = state.readAt[friendId] ?? 0;
-      return (state.directMessages[friendId] ?? []).filter(
+      if (blockedIds.includes(friendId)) return 0;
+      const last = readAt[friendId] ?? 0;
+      return (directMessages[friendId] ?? []).filter(
         (m) => m.senderId !== "me" && m.at > last,
       ).length;
     };
@@ -231,7 +283,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return {
       ...state,
-      friendRequests: state.friendRequests ?? [],
+      friends,
+      groups,
+      blockedIds,
+      directMessages,
+      friendRequests: Array.isArray(state.friendRequests) ? state.friendRequests : [],
       visibleFriends,
       blockedFriends,
       unreadFor,
@@ -239,11 +295,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       playerById: (id) => globalPlayers.find((p) => p.id === id),
       acceptRequest: (id) =>
         patch((p) => {
-          const req = (p.friendRequests ?? []).find((r) => r.id === id);
+          const req = (p.friendRequests ?? []).find((r) => r?.id === id);
           return {
             ...p,
             friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
-            friends: req && !p.friends.some((f) => f.id === id) ? [...p.friends, req] : p.friends,
+            friends: req && !(p.friends ?? []).some((f) => f?.id === id) ? [...(p.friends ?? []), req] : (p.friends ?? []),
           };
         }),
       declineRequest: (id) =>
@@ -271,7 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const q = name.trim().toLowerCase();
         if (!q) return false;
         if (q === (state.user?.name ?? "").trim().toLowerCase()) return false;
-        return [...globalPlayers, ...state.friends, ...(state.friendRequests ?? [])].some(
+        return [...globalPlayers, ...friends, ...(state.friendRequests ?? [])].some(
           (p) => p.name.trim().toLowerCase() === q,
         );
       },
@@ -292,71 +348,161 @@ export function AppProvider({ children }: { children: ReactNode }) {
               name: name ?? p.user.name,
               avatar: avatar ?? p.user.avatar,
             },
-            savedAccount: nameChanged ? { name: name! } : p.savedAccount,
+            savedAccount: nameChanged && p.user
+              ? { id: p.user.id, name: name! }
+              : p.savedAccount,
             nameChangedAt: nameChanged ? Date.now() : p.nameChangedAt,
           };
         }),
       deleteAccount: () => {
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {
-          /* ignore */
+        const accountId = state.user?.id;
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        if (accountId) {
+          try {
+            localStorage.removeItem(userStorageKey(accountId, "app_state"));
+            localStorage.removeItem(userStorageKey(accountId, "stickers"));
+            localStorage.removeItem(userStorageKey(accountId, "active_sound"));
+            localStorage.removeItem(userStorageKey(accountId, "isPro"));
+            localStorage.removeItem(userStorageKey(accountId, "dailyGoldClaimedDate"));
+            localStorage.removeItem(userStorageKey(accountId, "equippedProFrame"));
+            localStorage.removeItem(userStorageKey(accountId, "equippedProBanner"));
+          } catch {
+            /* ignore */
+          }
         }
         setState(seedState());
       },
 
       register: (name) =>
-        patch((p) => ({
-          ...p,
+        setState(() => {
+          const id = accountIdFor(name);
+          try {
+            localStorage.removeItem(userStorageKey(id, "app_state"));
+            localStorage.removeItem(userStorageKey(id, "stickers"));
+            localStorage.removeItem(userStorageKey(id, "active_sound"));
+            localStorage.removeItem(userStorageKey(id, "isPro"));
+            localStorage.removeItem(userStorageKey(id, "dailyGoldClaimedDate"));
+            localStorage.removeItem(userStorageKey(id, "equippedProFrame"));
+            localStorage.removeItem(userStorageKey(id, "equippedProBanner"));
+          } catch {
+            /* ignore */
+          }
+          localStorage.setItem(ACTIVE_SESSION_KEY, id);
+          return {
+            ...seedState(),
+            user: { id, name, avatar: avatarFor(name || "me"), points: 0, gold: 75, games: 0, wins: 0 },
+            savedAccount: { id, name },
+          };
+        }),
+      login: (name) => {
+        const id = accountIdFor(name);
+        let stored: Partial<State> = {};
+        try {
+          const raw = localStorage.getItem(userStorageKey(id, "app_state"));
+          if (raw) stored = JSON.parse(raw) as Partial<State>;
+        } catch {
+          /* ignore */
+        }
+        const isProMember = localStorage.getItem(userStorageKey(id, "isPro")) === "true" || stored.isProMember === true;
+        setState(() => ({
+          ...seedState(),
+          ...stored,
+          isProMember,
           user: {
-            id: "me",
+            id,
             name,
             avatar: avatarFor(name || "me"),
-            points: 0,
-            games: 0,
-            wins: 0,
+            points: stored.user?.points ?? 1840,
+            games: stored.user?.games ?? 62,
+            wins: stored.user?.wins ?? 35,
           },
-          savedAccount: { name },
-        })),
-      login: (name) =>
-        patch((p) => ({
-          ...p,
-          user: {
-            id: "me",
-            name,
-            avatar: avatarFor(name || "me"),
-            points: p.user?.points ?? 1840,
-            games: p.user?.games ?? 62,
-            wins: p.user?.wins ?? 35,
-          },
-          savedAccount: { name },
-        })),
+          savedAccount: { id, name },
+        }));
+        localStorage.setItem(ACTIVE_SESSION_KEY, id);
+      },
       loginSaved: () =>
-        patch((p) => ({
-          ...p,
-          user: {
-            id: "me",
-            name: p.savedAccount?.name ?? "یاریزان",
-            avatar: avatarFor(p.savedAccount?.name ?? "me"),
-            points: p.user?.points ?? 1840,
-            games: p.user?.games ?? 62,
-            wins: p.user?.wins ?? 35,
-          },
-        })),
-      logout: () => patch((p) => ({ ...p, user: null })),
+        setState((p) => {
+          const name = p.savedAccount?.name ?? "یاریزان";
+          const id = p.savedAccount?.id ?? accountIdFor(name);
+          localStorage.setItem(ACTIVE_SESSION_KEY, id);
+          let stored: Partial<State> = {};
+          try {
+            const raw = localStorage.getItem(userStorageKey(id, "app_state"));
+            if (raw) stored = JSON.parse(raw) as Partial<State>;
+          } catch {
+            /* ignore */
+          }
+          return {
+            ...seedState(),
+            ...stored,
+            isProMember: localStorage.getItem(userStorageKey(id, "isPro")) === "true" || stored.isProMember === true,
+            equippedProFrame: localStorage.getItem(userStorageKey(id, "equippedProFrame")) ?? stored.equippedProFrame ?? null,
+            equippedProBanner: localStorage.getItem(userStorageKey(id, "equippedProBanner")) ?? stored.equippedProBanner ?? null,
+            user: {
+              id,
+              name,
+              avatar: avatarFor(name),
+              points: 1840,
+              games: 62,
+              wins: 35,
+            },
+            savedAccount: { id, name },
+          };
+        }),
+      logout: () => {
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        setState(seedState());
+      },
       setOnline: (v) => patch((p) => ({ ...p, online: v })),
       addGold: (amount) => patch((p) => ({ ...p, gold: p.gold + amount })),
-      sendDirect: (friendId, text) =>
+      spendGold: (amount) => {
+        if (!Number.isFinite(amount) || amount < 0 || state.gold < amount) return false;
+        patch((p) => ({ ...p, gold: p.gold - amount }));
+        return true;
+      },
+      unlockStickerSlot: (slotIndex) => {
+        const unlocked = state.unlockedStickerSlots ?? [];
+        const price = [0, 75, 99, 120, 150][slotIndex];
+        if (
+          !Number.isInteger(slotIndex) ||
+          slotIndex < 1 ||
+          slotIndex > 4 ||
+          unlocked.includes(slotIndex) ||
+          price === undefined ||
+          state.gold < price
+        ) {
+          return false;
+        }
         patch((p) => ({
           ...p,
-          directMessages: {
-            ...p.directMessages,
-            [friendId]: [
-              ...(p.directMessages[friendId] ?? []),
-              { id: crypto.randomUUID(), senderId: "me", text, at: Date.now() },
-            ],
-          },
-        })),
+          gold: p.gold - price,
+          unlockedStickerSlots: [...(p.unlockedStickerSlots ?? []), slotIndex].sort((a, b) => a - b),
+        }));
+        return true;
+      },
+      sendDirect: (friendId, text, imageUrl) =>
+        patch((p) => {
+          const directMessages = p.directMessages && typeof p.directMessages === "object"
+            ? p.directMessages
+            : {};
+          const existingMessages = Array.isArray(directMessages[friendId])
+            ? directMessages[friendId]
+            : [];
+          const optimisticMessage: Message = {
+            id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            text: typeof text === "string" ? text : "",
+            senderId: "me",
+            imageUrl: typeof imageUrl === "string" && imageUrl ? imageUrl : undefined,
+            at: Date.now(),
+          };
+          return {
+            ...p,
+            directMessages: {
+              ...directMessages,
+              [friendId]: [...existingMessages, optimisticMessage],
+            },
+          };
+        }),
       sendGroup: (groupId, text) =>
         patch((p) => ({
           ...p,
@@ -402,6 +548,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       setTokenId: (id) => patch((p) => ({ ...p, tokenId: id })),
       setBoardId: (id) => patch((p) => ({ ...p, boardId: id })),
+      activatePro: () => {
+        if (!state.user?.id || state.isProMember) return false;
+        const id = state.user.id;
+        localStorage.setItem(userStorageKey(id, "isPro"), "true");
+        localStorage.setItem(userStorageKey(id, "equippedProFrame"), "golden-shimmer");
+        localStorage.setItem(userStorageKey(id, "equippedProBanner"), "vip-aurora");
+        patch((p) => ({
+          ...p,
+          isProMember: true,
+          gold: p.gold + 500,
+          unlockedStickerSlots: p.unlockedStickerSlots.includes(1)
+            ? p.unlockedStickerSlots
+            : [...p.unlockedStickerSlots, 1].sort((a, b) => a - b),
+          boardId: "vip-board",
+          tokenId: "vip-token",
+          equippedProFrame: "golden-shimmer",
+          equippedProBanner: "vip-aurora",
+          dailyGoldClaimedDate: null,
+        }));
+        return true;
+      },
+      setProFrame: (frame) => {
+        if (!state.user?.id || !state.isProMember) return;
+        localStorage.setItem(userStorageKey(state.user.id, "equippedProFrame"), frame ?? "");
+        patch((p) => ({ ...p, equippedProFrame: frame }));
+      },
+      setProBanner: (banner) => {
+        if (!state.user?.id || !state.isProMember) return;
+        localStorage.setItem(userStorageKey(state.user.id, "equippedProBanner"), banner ?? "");
+        patch((p) => ({ ...p, equippedProBanner: banner }));
+      },
     };
   }, [state, patch]);
 

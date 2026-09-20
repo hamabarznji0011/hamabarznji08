@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from "react";
 import {
   ArrowRight,
   Ban,
@@ -11,6 +11,7 @@ import {
   UserPlus,
   Users,
   X,
+  Image,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatTime, useApp, type Friend, type Group } from "@/lib/app-store";
@@ -25,13 +26,77 @@ export const Route = createFileRoute("/app/friends")({
       { property: "og:description", content: "چات و گروپەکانت لە یاری مار و پەیژە." },
     ],
   }),
-  component: FriendsTab,
+  component: FriendsRoute,
 });
 
 type View = "friends" | "groups";
 
+const DEFAULT_PROFILE_IMAGE = "/default-avatar.svg";
+
+const handleProfileImageError = (event: React.SyntheticEvent<HTMLImageElement>) => {
+  event.currentTarget.onerror = null;
+  event.currentTarget.src = DEFAULT_PROFILE_IMAGE;
+};
+
+function renderProfilePic(profile: { avatar?: unknown; avatar_url?: unknown; id?: unknown; name?: unknown } | null | undefined): string {
+  const value = profile?.avatar_url ?? profile?.avatar;
+  if (typeof value !== "string" || !value.trim()) return DEFAULT_PROFILE_IMAGE;
+  const image = value.trim();
+  if (/^(https?:\/\/|data:image\/)/i.test(image)) return image;
+  if (image.startsWith("/")) return image;
+  return `/avatars/${encodeURIComponent(image)}.png`;
+}
+
+type FriendsBoundaryState = { error: Error | null; retryKey: number };
+
+class FriendsErrorBoundary extends Component<{ children: ReactNode }, FriendsBoundaryState> {
+  state: FriendsBoundaryState = { error: null, retryKey: 0 };
+
+  static getDerivedStateFromError(error: Error): FriendsBoundaryState {
+    return { error, retryKey: 0 };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Friends route crashed", error, info.componentStack);
+  }
+
+  retry = () => {
+    this.setState((previous) => ({ error: null, retryKey: previous.retryKey + 1 }));
+  };
+
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="flex min-h-screen items-center justify-center px-6 pb-32 text-center">
+          <div className="glass-strong w-full max-w-sm rounded-3xl p-6">
+            <h1 className="text-lg font-extrabold">نەتوانرا هاوڕێیان لۆد بکرێت</h1>
+            <p className="mt-2 text-sm text-muted-foreground">داتاکانی هاوڕێکان بە شێوەیەکی چاوەڕواننەکراو هاتن.</p>
+            <button onClick={this.retry} className="press mt-5 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground">
+              دووبارە هەوڵدانەوە
+            </button>
+            <details className="mt-5 text-left">
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">وردەکاریی تەکنیکی</summary>
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-[10px] text-destructive">
+                {this.state.error.message}{this.state.error.stack ? `\n\n${this.state.error.stack}` : ""}
+              </pre>
+            </details>
+          </div>
+        </section>
+      );
+    }
+    return <div key={this.state.retryKey}>{this.props.children}</div>;
+  }
+}
+
+function FriendsRoute() {
+  return <FriendsErrorBoundary><FriendsTab /></FriendsErrorBoundary>;
+}
+
 function FriendsTab() {
   const { visibleFriends, groups, unreadFor, friendRequests } = useApp();
+  const safeFriends = Array.isArray(visibleFriends) ? visibleFriends.filter(Boolean) : [];
+  const safeGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+  const safeRequests = Array.isArray(friendRequests) ? friendRequests.filter(Boolean) : [];
   const [view, setView] = useState<View>("friends");
   const [openFriend, setOpenFriend] = useState<Friend | null>(null);
   const [openGroup, setOpenGroup] = useState<Group | null>(null);
@@ -55,9 +120,9 @@ function FriendsTab() {
         className="glass press absolute top-[max(1rem,env(safe-area-inset-top))] left-36 flex size-11 items-center justify-center rounded-full"
       >
         <UserPlus className="size-5 text-primary" />
-        {friendRequests.length > 0 && (
+        {safeRequests.length > 0 && (
           <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-            {friendRequests.length}
+            {safeRequests.length}
           </span>
         )}
       </button>
@@ -83,19 +148,20 @@ function FriendsTab() {
 
       {view === "friends" ? (
         <div className="space-y-3">
-          {visibleFriends.map((f) => {
-            const unread = unreadFor(f.id);
+          {safeFriends.map((f) => {
+            if (!f?.id) return null;
+            const unread = unreadFor?.(f.id) ?? 0;
             return (
               <div
                 key={f.id}
                 className="glass animate-rise-in flex items-center gap-3 rounded-2xl p-3"
               >
                 <button
-                  onClick={() => setPopup({ type: "friend", id: f.id })}
+                  onClick={() => f?.id && setPopup({ type: "friend", id: f.id })}
                   className="press relative"
                   aria-label={`ڕێکخستنی ${f.name}`}
                 >
-                  <img src={f.avatar} alt={f.name} className="size-12 rounded-full bg-secondary" />
+                  <img src={renderProfilePic(f)} onError={handleProfileImageError} alt={f.name ?? "هاوڕێ"} className="size-12 rounded-full bg-secondary" />
                   {unread > 0 && (
                     <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
                       {unread}
@@ -103,7 +169,7 @@ function FriendsTab() {
                   )}
                 </button>
                 <button
-                  onClick={() => setOpenFriend(f)}
+                  onClick={() => f?.id && setOpenFriend(f)}
                   className="press flex-1 text-right"
                 >
                   <p className="font-bold">{f.name}</p>
@@ -112,10 +178,14 @@ function FriendsTab() {
               </div>
             );
           })}
+          {safeFriends.length === 0 && (
+            <p className="pt-10 text-center text-sm text-muted-foreground">هیچ هاوڕێیەک نییە</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {groups.map((g) => (
+          {safeGroups.map((g) => (
+            g?.id ? (
             <div
               key={g.id}
               className="glass animate-rise-in flex items-center gap-3 rounded-2xl border-primary/30 p-3"
@@ -129,11 +199,11 @@ function FriendsTab() {
               </button>
               <button onClick={() => setOpenGroup(g)} className="press flex-1 text-right">
                 <p className="font-bold">{g.name}</p>
-                <p className="text-xs text-muted-foreground">{g.memberIds.length} ئەندام</p>
+                <p className="text-xs text-muted-foreground">{Array.isArray(g.memberIds) ? g.memberIds.length : 0} ئەندام</p>
               </button>
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(g.code);
+                  if (g.code) navigator.clipboard?.writeText(g.code).catch(() => {});
                   toast.success("کۆدەکە کۆپی کرا");
                 }}
                 className="press flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1.5 text-sm font-bold text-primary"
@@ -142,8 +212,9 @@ function FriendsTab() {
                 {g.code}
               </button>
             </div>
+            ) : null
           ))}
-          {groups.length === 0 && (
+          {safeGroups.length === 0 && (
             <p className="text-center text-sm text-muted-foreground">هیچ گروپێک نییە</p>
           )}
         </div>
@@ -152,8 +223,8 @@ function FriendsTab() {
       {popup && <ActionPopup popup={popup} onClose={() => setPopup(null)} />}
       {requestsOpen && <FriendRequests onClose={() => setRequestsOpen(false)} />}
       {creating && <CreateGroup onClose={() => setCreating(false)} />}
-      {openFriend && <DirectChat friend={openFriend} onClose={() => setOpenFriend(null)} />}
-      {openGroup && <GroupChat group={openGroup} onClose={() => setOpenGroup(null)} />}
+      {openFriend?.id && <DirectChat friend={openFriend} onClose={() => setOpenFriend(null)} />}
+      {openGroup?.id && <GroupChat group={openGroup} onClose={() => setOpenGroup(null)} />}
     </section>
   );
 }
@@ -204,6 +275,7 @@ function ActionPopup({
 
 function CreateGroup({ onClose }: { onClose: () => void }) {
   const { visibleFriends, createGroup } = useApp();
+  const safeFriends = Array.isArray(visibleFriends) ? visibleFriends.filter((friend) => friend?.id) : [];
   const [selected, setSelected] = useState<string[]>([]);
   const [name, setName] = useState("");
   useHideChrome();
@@ -256,7 +328,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
       />
 
       <div className="mt-4 flex-1 space-y-3 overflow-y-auto no-scrollbar">
-        {visibleFriends.map((f) => {
+        {safeFriends.map((f) => {
           const on = selected.includes(f.id);
           return (
             <button
@@ -266,7 +338,7 @@ function CreateGroup({ onClose }: { onClose: () => void }) {
                 on ? "border-primary bg-primary/15 text-panel-foreground" : "border-panel-border bg-panel-foreground/5 text-panel-foreground"
               }`}
             >
-              <img src={f.avatar} alt={f.name} className="size-11 rounded-full bg-secondary" />
+              <img src={renderProfilePic(f)} onError={handleProfileImageError} alt={f.name ?? "هاوڕێ"} className="size-11 rounded-full bg-secondary" />
               <span className="flex-1 text-right font-bold">{f.name}</span>
               {on && <Check className="size-5 text-primary" />}
             </button>
@@ -283,14 +355,17 @@ function ChatBubble({
   at,
   author,
   accent,
+  imageUrl,
 }: {
   mine: boolean;
-  text: string;
-  at: number;
+  text?: string;
+  at?: number;
   author?: string | undefined;
   accent?: boolean;
+  imageUrl?: string;
 }) {
-  const codeMatch = /^\d{6}$/.test(text.trim());
+  const safeText = typeof text === "string" ? text : "";
+  const codeMatch = /^\d{6}$/.test(safeText.trim());
   const { joinGroupByCode } = useApp();
 
   return (
@@ -305,66 +380,98 @@ function ChatBubble({
               : "bg-panel-foreground/5 text-panel-foreground"
         }`}
       >
+        {imageUrl && <img src={imageUrl} alt="attachment" className="mb-2 max-h-48 w-full rounded-xl object-cover" />}
         {codeMatch ? (
           <button
             onClick={() => {
-              const g = joinGroupByCode(text.trim());
+              const g = joinGroupByCode?.(safeText.trim());
               toast.success(g ? `چوویتە ناو ${g.name}` : "کۆدەکە دروست نییە");
             }}
             className="font-bold text-emerald-glow underline"
           >
-            {text}
+            {safeText}
           </button>
         ) : (
-          text
+          safeText
         )}
       </div>
-      <span className="mt-1 text-[10px] text-panel-muted">{formatTime(at)}</span>
+      <span className="mt-1 text-[10px] text-panel-muted">{formatTime(typeof at === "number" ? at : Date.now())}</span>
     </div>
   );
 }
 
-function Composer({ onSend }: { onSend: (text: string) => void }) {
+function Composer({ onSend, allowImages = false }: { onSend: (text: string, imageUrl?: string) => void; allowImages?: boolean }) {
   const [text, setText] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const canSend = text.trim() || imageUrl;
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSend) return;
+    try {
+      onSend(text.trim(), imageUrl);
+      setText("");
+      setImageUrl(undefined);
+    } catch (error) {
+      console.error("Unable to send chat message", error);
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 pt-3">
+    <form onSubmit={handleSubmit} className="flex items-center gap-2 pt-3">
+      {allowImages && <><input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setImageUrl(String(reader.result));
+        reader.readAsDataURL(file);
+      }} /><button type="button" onClick={() => fileRef.current?.click()} aria-label="ناردنی وێنە" className="press flex size-11 items-center justify-center rounded-full border border-yellow-400/50 text-yellow-500"><Image className="size-5" /></button></>}
       <input
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="نامەیەک بنووسە..."
         className="flex-1 rounded-2xl border border-panel-border bg-panel-foreground/5 px-4 py-3 text-sm text-panel-foreground outline-none placeholder:text-panel-muted focus:border-primary"
       />
-      {text.trim() && (
+      {canSend && (
         <button
-          onClick={() => {
-            onSend(text.trim());
-            setText("");
-          }}
+          type="submit"
           aria-label="ناردن"
           className="press animate-soft-in flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground"
         >
           <Send className="size-5 -scale-x-100" />
         </button>
       )}
-    </div>
+    </form>
   );
 }
 
 function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }) {
-  const { directMessages, sendDirect, markRead } = useApp();
+  const { directMessages, sendDirect, markRead, isProMember } = useApp();
   useHideChrome();
+  const friendId = friend?.id;
+  const messages = friendId && directMessages && typeof directMessages === "object"
+    ? (Array.isArray(directMessages[friendId]) ? directMessages[friendId] : [])
+    : [];
   useEffect(() => {
-    markRead(friend.id);
+    if (!friendId) return;
+    try {
+      markRead?.(friendId);
+    } catch {
+      // Keep an invalid persisted chat from taking down the route.
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friend.id]);
-  const messages = directMessages[friend.id] ?? [];
+  }, [friendId]);
+
+  if (!friendId) {
+    return <EmptyChat onClose={onClose} label="هاوڕێیەک هەڵبژێرە" />;
+  }
 
   return (
     <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between pb-3">
         <div className="flex items-center gap-3">
-          <img src={friend.avatar} alt={friend.name} className="size-10 rounded-full bg-secondary" />
-          <span className="font-bold text-panel-foreground">{friend.name}</span>
+          <img src={renderProfilePic(friend)} onError={handleProfileImageError} alt={friend?.name ?? "هاوڕێ"} className="size-10 rounded-full bg-secondary" />
+          <span className="font-bold text-panel-foreground">{friend?.name ?? "هاوڕێ"}</span>
         </div>
         <button
           onClick={onClose}
@@ -376,12 +483,24 @@ function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar py-2">
-        {messages.map((m) => (
-          <ChatBubble key={m.id} mine={m.senderId === "me"} text={m.text} at={m.at} />
-        ))}
+        {messages.length > 0 ? messages.map((m) => m?.id ? (
+          <ChatBubble key={m.id} mine={m?.senderId === "me"} text={m?.text ?? ""} imageUrl={m?.imageUrl ?? undefined} at={m?.at} />
+        ) : null) : <p className="pt-10 text-center text-sm text-panel-muted">هیچ نامەیەک نییە</p>}
       </div>
 
-      <Composer onSend={(t) => sendDirect(friend.id, t)} />
+      <Composer allowImages={isProMember} onSend={(t, imageUrl) => sendDirect(friend.id, t, imageUrl)} />
+    </div>
+  );
+}
+
+function EmptyChat({ onClose, label }: { onClose: () => void; label: string }) {
+  useHideChrome();
+  return (
+    <div className="panel animate-soft-in fixed inset-0 z-50 flex flex-col items-center justify-center px-6 text-center">
+      <p className="text-sm text-panel-muted">{label}</p>
+      <button onClick={onClose} className="press mt-5 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground">
+        گەڕانەوە
+      </button>
     </div>
   );
 }
@@ -389,8 +508,12 @@ function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }
 function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
   const { groupMessages, sendGroup, friends } = useApp();
   useHideChrome();
-  const messages = groupMessages[group.id] ?? [];
-  const nameOf = (id: string) => friends.find((f) => f.id === id)?.name ?? "ئەندام";
+  const groupId = group?.id;
+  const messages = groupId && groupMessages && typeof groupMessages === "object" && Array.isArray(groupMessages[groupId]) ? groupMessages[groupId] : [];
+  const safeFriends = Array.isArray(friends) ? friends : [];
+  const nameOf = (id: string) => safeFriends.find((f) => f?.id === id)?.name ?? "ئەندام";
+
+  if (!groupId) return <EmptyChat onClose={onClose} label="گروپێک هەڵبژێرە" />;
 
   return (
     <div className="panel animate-soft-in fixed inset-0 z-50 flex w-screen flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -400,15 +523,15 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
             <Users className="size-5 text-accent" />
           </span>
           <div>
-            <p className="font-bold text-panel-foreground">{group.name}</p>
+            <p className="font-bold text-panel-foreground">{group?.name ?? "گروپ"}</p>
             <button
               onClick={() => {
-                navigator.clipboard?.writeText(group.code);
+                if (group?.code) navigator.clipboard?.writeText(group.code).catch(() => {});
                 toast.success("کۆدەکە کۆپی کرا");
               }}
               className="text-xs font-bold text-emerald-700"
             >
-              {group.code}
+                {group?.code ?? ""}
             </button>
           </div>
         </div>
@@ -422,7 +545,7 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar py-2">
-        {messages.map((m) => (
+        {messages.length > 0 ? messages.map((m) => m?.id ? (
           <ChatBubble
             key={m.id}
             mine={m.senderId === "me"}
@@ -431,7 +554,7 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
             accent
             author={m.senderId === "me" ? undefined : nameOf(m.senderId)}
           />
-        ))}
+        ) : null) : <p className="pt-10 text-center text-sm text-panel-muted">هیچ نامەیەک نییە</p>}
       </div>
 
       <Composer onSend={(t) => sendGroup(group.id, t)} />
@@ -441,6 +564,7 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
 
 function FriendRequests({ onClose }: { onClose: () => void }) {
   const { friendRequests, acceptRequest, declineRequest } = useApp();
+  const safeRequests = Array.isArray(friendRequests) ? friendRequests.filter((request) => request?.id) : [];
   useHideChrome();
 
   return (
@@ -458,13 +582,13 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
-        {friendRequests.map((r, i) => (
+        {safeRequests.map((r, i) => (
           <div
             key={r.id}
             style={{ animationDelay: `${i * 50}ms` }}
             className="animate-rise-in flex items-center gap-3 rounded-2xl border border-panel-border bg-panel-foreground/5 p-3"
           >
-            <img src={r.avatar} alt={r.name} className="size-12 rounded-full bg-secondary" />
+            <img src={renderProfilePic(r)} onError={handleProfileImageError} alt={r.name ?? "هاوڕێ"} className="size-12 rounded-full bg-secondary" />
             <div className="flex-1 text-right">
               <p className="font-bold text-panel-foreground">{r.name}</p>
               <p className="text-xs text-panel-muted">{r.points} خاڵ</p>
@@ -495,7 +619,7 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         ))}
-        {friendRequests.length === 0 && (
+        {safeRequests.length === 0 && (
           <p className="pt-10 text-center text-sm text-panel-muted">هیچ داواکارییەک نییە</p>
         )}
       </div>

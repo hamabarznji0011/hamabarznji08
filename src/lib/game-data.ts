@@ -12,6 +12,7 @@ export type BoardSkin = {
 };
 
 export const tokens: TokenSkin[] = [
+  { id: "vip-token", name: "پوولی زێڕینی PRO", from: "#fff7ad", to: "#b7791f" },
   { id: "t1", name: "مارگرین", from: "#34d399", to: "#065f46" },
   { id: "t2", name: "زێڕین", from: "#fcd34d", to: "#b45309" },
   { id: "t3", name: "خوێنین", from: "#fb7185", to: "#881337" },
@@ -25,6 +26,7 @@ export const tokens: TokenSkin[] = [
 ];
 
 export const boards: BoardSkin[] = [
+  { id: "vip-board", name: "تەختەی ئەستێرەیی PRO", colors: ["#241000", "#9a6700", "#ffe08a"] },
   { id: "b1", name: "دارستانی سەوز", colors: ["#052e16", "#166534", "#4ade80"] },
   { id: "b2", name: "بیابانی زێڕین", colors: ["#3b2606", "#92400e", "#fbbf24"] },
   { id: "b3", name: "دەریای شین", colors: ["#082f49", "#0369a1", "#38bdf8"] },

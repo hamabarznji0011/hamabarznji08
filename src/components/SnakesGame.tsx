@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Loader2, Star } from "lucide-react";
+import { ArrowRight, Crown, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import {
-  BOARD_SIZE,
   BOT_NAMES,
-  LADDERS,
   LAST_SQUARE,
   PLAYER_COLORS,
-  REACTIONS,
-  SNAKES,
-  SNAKE_COLORS,
   delay,
   jumpFor,
   squareCenter,
@@ -17,197 +12,59 @@ import {
 } from "@/lib/snakes-ladders";
 import type { BoardSkin } from "@/lib/game-data";
 import { useHideChrome } from "@/components/chrome";
+import { useApp, userStorageKey } from "@/lib/app-store";
+import { createClient } from "@supabase/supabase-js";
 
 const STEP_MS = 220;
 const JUMP_MS = 750;
+const TURN_SECONDS = 10;
+const BOARD_Y_OFFSET = -7;
+const STARTING_Y = -11;
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] || "";
+const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const DEFAULT_MATCH_ID = "snakes-ladders-demo-match";
 
-const CELL_GREEN = "#bfe0a8";
-const CELL_WHITE = "#f6f5ef";
+/* ---------------------------------- Tokens --------------------------------- */
+function Token({
+  player,
+  offset,
+  motion,
+}: {
+  player: GamePlayer;
+  offset: number;
+  motion?: "climb" | "slide" | "capture" | undefined;
+}) {
+  if (player.kicked) return null;
 
-/* ---------------------------------- board --------------------------------- */
-
-function BoardGrid() {
-  const rows = Array.from({ length: BOARD_SIZE }, (_, i) => BOARD_SIZE - 1 - i);
-  return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[14px]">
-      {rows.map((row) => {
-        const cells = Array.from({ length: BOARD_SIZE }, (_, i) => {
-          const idx = row % 2 === 0 ? BOARD_SIZE - 1 - i : i;
-          return { n: row * BOARD_SIZE + idx + 1, col: i };
-        });
-        return (
-          <div key={row} className="flex flex-1">
-            {cells.map(({ n, col }) => {
-              const isLast = n === LAST_SQUARE;
-              return (
-                <div
-                  key={n}
-                  className="relative flex flex-1 items-center justify-center border-[0.5px] border-black/5"
-                  style={{
-                    background: isLast
-                      ? "linear-gradient(150deg,#c0392b,#8e2019)"
-                      : (col + row) % 2 === 0
-                        ? CELL_GREEN
-                        : CELL_WHITE,
-                  }}
-                >
-                  {isLast ? (
-                    <Star className="size-[55%] fill-[#f2c14e] text-[#c99a24]" />
-                  ) : (
-                    <span className="select-none text-[9px] font-bold leading-none text-[#4a4a4a]">
-                      {n}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const pt = (n: number) => {
-  const c = squareCenter(n);
-  return { x: 100 - c.x, y: 100 - c.y };
-};
-
-function Ladders() {
-  return (
-    <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
-      <defs>
-        <linearGradient id="sg-rail" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#b02a20" />
-          <stop offset="45%" stopColor="#f0574a" />
-          <stop offset="100%" stopColor="#8f1f18" />
-        </linearGradient>
-      </defs>
-      {Object.entries(LADDERS).map(([from, to]) => {
-        const a = pt(Number(from));
-        const b = pt(to);
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const nx = (-dy / len) * 1.2;
-        const ny = (dx / len) * 1.2;
-        const rungs = Math.max(3, Math.round(len / 7));
-        return (
-          <g key={`l-${from}`} strokeLinecap="round">
-            {Array.from({ length: rungs }, (_, i) => {
-              const t = (i + 0.5) / rungs;
-              const cx = a.x + dx * t;
-              const cy = a.y + dy * t;
-              return (
-                <g key={i}>
-                  <line
-                    x1={cx + nx}
-                    y1={cy + ny}
-                    x2={cx - nx}
-                    y2={cy - ny}
-                    stroke="#7d1a14"
-                    strokeWidth="0.8"
-                  />
-                  <line
-                    x1={cx + nx}
-                    y1={cy + ny - 0.2}
-                    x2={cx - nx}
-                    y2={cy - ny - 0.2}
-                    stroke="#f5776a"
-                    strokeWidth="0.4"
-                  />
-                </g>
-              );
-            })}
-            <line
-              x1={a.x + nx}
-              y1={a.y + ny}
-              x2={b.x + nx}
-              y2={b.y + ny}
-              stroke="url(#sg-rail)"
-              strokeWidth="0.8"
-            />
-            <line
-              x1={a.x - nx}
-              y1={a.y - ny}
-              x2={b.x - nx}
-              y2={b.y - ny}
-              stroke="url(#sg-rail)"
-              strokeWidth="0.8"
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function Snakes() {
-  return (
-    <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
-      {Object.entries(SNAKES).map(([head, tail], idx) => {
-        const a = pt(Number(head));
-        const b = pt(tail);
-        const c = SNAKE_COLORS[Number(head)] ?? { body: "#34d399", belly: "#bbf7d0", dark: "#059669" };
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const ox = (-dy / len) * 5;
-        const oy = (dx / len) * 5;
-        const p1 = { x: a.x + dx * 0.3 + ox, y: a.y + dy * 0.3 + oy };
-        const p2 = { x: a.x + dx * 0.7 - ox, y: a.y + dy * 0.7 - oy };
-        const d = `M ${a.x} ${a.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${b.x} ${b.y}`;
-        const hx = a.x - dx / len * 0.4;
-        const hy = a.y - dy / len * 0.4;
-        return (
-          <g
-            key={`s-${head}`}
-            style={{ animation: `sg-slither 6s ease-in-out ${idx * 0.4}s infinite`, transformOrigin: `${a.x}% ${a.y}%` }}
-          >
-            <path d={d} stroke="rgba(0,0,0,.16)" strokeWidth="2.5" fill="none" strokeLinecap="round" transform="translate(0.5,0.7)" />
-            <path d={d} stroke={c.dark} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-            <path d={d} stroke={c.body} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-            <path d={d} stroke={c.belly} strokeWidth="0.6" fill="none" strokeLinecap="round" opacity="0.55" />
-            {/* head */}
-            <circle cx={hx} cy={hy} r="1.6" fill={c.body} stroke={c.dark} strokeWidth="0.4" />
-            <circle cx={hx - 0.6} cy={hy - 0.5} r="0.55" fill="#fff" />
-            <circle cx={hx + 0.6} cy={hy - 0.5} r="0.55" fill="#fff" />
-            <circle cx={hx - 0.6} cy={hy - 0.5} r="0.25" fill="#111">
-              <animate attributeName="cy" values={`${hy - 0.5};${hy - 0.3};${hy - 0.5}`} dur="3s" repeatCount="indefinite" />
-            </circle>
-            <circle cx={hx + 0.6} cy={hy - 0.5} r="0.25" fill="#111">
-              <animate attributeName="cy" values={`${hy - 0.5};${hy - 0.3};${hy - 0.5}`} dur="3s" repeatCount="indefinite" />
-            </circle>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function Token({ player, offset }: { player: GamePlayer; offset: number }) {
   const on = player.position >= 1;
-  const c = squareCenter(player.position || 1);
-  const spread = [
-    [-1.8, -1.8],
-    [1.8, -1.8],
-    [-1.8, 1.8],
-    [1.8, 1.8],
-  ][offset] ?? [0, 0];
+  const c = squareCenter(player.position === 0 ? 1 : player.position);
+  const startSpread = [-10, -6.7, -3.4, 0][offset] ?? 0;
   return (
     <div
-      className="absolute size-[5.5%] -translate-x-1/2 translate-y-1/2 rounded-full border-[1.5px]"
+      className="absolute size-[6.5%] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-white shadow-md overflow-visible bg-white/50"
       style={{
-        left: `${100 - (c.x + spread[0]!)}%`,
-        bottom: `${c.y + spread[1]!}%`,
-        background: `radial-gradient(circle at 32% 26%, #ffffffcc, ${player.color.from} 42%, ${player.color.to})`,
-        borderColor: "#ffffff",
-        boxShadow: "0 3px 6px rgba(0,0,0,.35)",
+        left: `${c.x + (player.position === 0 ? startSpread : 0)}%`,
+        bottom: `${player.position === 0 ? STARTING_Y : c.y + BOARD_Y_OFFSET}%`,
         opacity: on ? 1 : 0.6,
-        transition: `left ${STEP_MS}ms cubic-bezier(.3,.9,.35,1), bottom ${STEP_MS}ms cubic-bezier(.3,.9,.35,1)`,
+        transition: `left ${motion === "climb" || motion === "slide" ? JUMP_MS : motion === "capture" ? 700 : STEP_MS}ms cubic-bezier(.3,.9,.35,1), bottom ${motion === "climb" || motion === "slide" ? JUMP_MS : motion === "capture" ? 700 : STEP_MS}ms cubic-bezier(.3,.9,.35,1)`,
         zIndex: 20 + offset,
       }}
-    />
+    >
+      <div
+        key={player.position}
+        className="size-full overflow-hidden rounded-full"
+        style={{
+          animation: motion === "capture"
+            ? "sg-capture 700ms cubic-bezier(.3,.9,.35,1)"
+            : on
+              ? `sg-hop ${motion === "climb" || motion === "slide" ? JUMP_MS : STEP_MS}ms cubic-bezier(.3,.9,.35,1)`
+              : undefined,
+        }}
+      >
+        <img src={player.token_url || player.avatar} alt="token" className="size-full object-cover" />
+      </div>
+    </div>
   );
 }
 
@@ -215,55 +72,66 @@ function Token({ player, offset }: { player: GamePlayer; offset: number }) {
 
 const PIPS: Record<number, [number, number][]> = {
   1: [[50, 50]],
-  2: [
-    [30, 30],
-    [70, 70],
-  ],
-  3: [
-    [28, 28],
-    [50, 50],
-    [72, 72],
-  ],
-  4: [
-    [30, 30],
-    [70, 30],
-    [30, 70],
-    [70, 70],
-  ],
-  5: [
-    [30, 30],
-    [70, 30],
-    [50, 50],
-    [30, 70],
-    [70, 70],
-  ],
-  6: [
-    [30, 26],
-    [70, 26],
-    [30, 50],
-    [70, 50],
-    [30, 74],
-    [70, 74],
-  ],
+  2: [[30, 30],[70, 70]],
+  3: [[28, 28],[50, 50],[72, 72]],
+  4: [[30, 30],[70, 30],[30, 70],[70, 70]],
+  5: [[30, 30],[70, 30],[50, 50],[30, 70],[70, 70]],
+  6: [[30, 26],[70, 26],[30, 50],[70, 50],[30, 74],[70, 74]],
 };
 
-function DiceFace({ value, rolling }: { value: number; rolling: boolean }) {
+function DiceFace({ value }: { value: number }) {
   return (
     <div
-      className="grid size-[68px] place-items-center rounded-[18px]"
+    className="grid size-[48px] md:size-[54px] place-items-center rounded-[12px]"
       style={{
         background: "linear-gradient(155deg,#ffffff,#f4f1e6 60%,#ded9c7)",
         boxShadow:
-          "inset 0 3px 4px rgba(255,255,255,.95), inset 0 -6px 8px rgba(0,0,0,.14), 0 10px 18px rgba(0,0,0,.25)",
-        animation: rolling ? "sg-shake .35s linear infinite" : undefined,
+          "inset 0 3px 4px rgba(255,255,255,.95), inset 0 -6px 8px rgba(0,0,0,.14), 0 8px 14px rgba(0,0,0,.22)",
       }}
     >
-      <svg viewBox="0 0 100 100" className="size-full p-2">
+      <svg viewBox="0 0 100 100" className="size-full p-1.5">
         {PIPS[value]!.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r="8.5" fill="#141414" />
+          <circle key={i} cx={x} cy={y} r="8.5" fill={value === 1 ? "#c0392b" : "#141414"} />
         ))}
       </svg>
     </div>
+  );
+}
+
+function PlayerAvatar({ player, pro = false }: { player: GamePlayer; pro?: boolean }) {
+  return (
+    <div className="relative shrink-0 size-8">
+      <img
+        src={player.avatar}
+        alt={player.name}
+        className={`size-full rounded-md object-cover border ${pro ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,.8)]" : "border-black/5"} ${player.kicked ? "grayscale" : ""}`}
+      />
+      {pro && <span className="absolute -right-2 -top-2 flex size-4 items-center justify-center rounded-full bg-yellow-300 text-yellow-950"><Crown className="size-2.5" /></span>}
+      {player.kicked && (
+        <>
+          <span className="pointer-events-none absolute left-[-10%] right-[-10%] top-1/2 h-0.5 rotate-[-18deg] bg-[#c0392b]" />
+          <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 text-[8px] font-bold text-[#c0392b]">
+            Left
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TurnTimer({ value }: { value: number }) {
+  return (
+    <span
+      key={value}
+      className="text-lg font-semibold leading-none"
+      style={{
+        color: value <= 5 ? "#c0392b" : "#141414",
+        fontFamily: "Georgia, serif",
+        animation: "sg-timer-pulse .9s ease-in-out",
+      }}
+    >
+      {value}
+    </span>
   );
 }
 
@@ -304,18 +172,32 @@ function Confetti() {
 /* --------------------------------- game ----------------------------------- */
 
 export function SnakesGame({
-  board: _board,
+  board,
   me,
+  stickers = [],
+  matchId = DEFAULT_MATCH_ID,
   onClose,
 }: {
-  board: BoardSkin;
-  me: { name: string; avatar: string };
+  board: BoardSkin & { image_url?: string };
+  me: { name: string; avatar: string; token_url?: string };
+  stickers?: any[];
+  matchId?: string;
   onClose: () => void;
 }) {
   useHideChrome();
+  const { user, isProMember } = useApp();
   const [phase, setPhase] = useState<"matchmaking" | "playing">("matchmaking");
+  const [gameStickers, setGameStickers] = useState(stickers);
   const [players, setPlayers] = useState<GamePlayer[]>(() => [
-    { id: "me", name: me.name, avatar: me.avatar, color: PLAYER_COLORS[0]!, isHuman: true, position: 0 },
+    { 
+      id: "me", 
+      name: me.name, 
+      avatar: me.avatar, 
+      color: PLAYER_COLORS[0]!, 
+      isHuman: true, 
+      position: 0,
+      token_url: me.token_url 
+    } as any,
     ...BOT_NAMES.map((n, i) => ({
       id: `bot-${i}`,
       name: n,
@@ -329,10 +211,22 @@ export function SnakesGame({
   const [dice, setDice] = useState(1);
   const [rolling, setRolling] = useState(false);
   const [status, setStatus] = useState("");
-  const [reaction, setReaction] = useState<string | null>(null);
   const [winner, setWinner] = useState<GamePlayer | null>(null);
+  const [timeLeft, setTimeLeft] = useState(TURN_SECONDS);
+  const [timerRound, setTimerRound] = useState(0);
+  const [tokenMotion, setTokenMotion] = useState<Record<string, "climb" | "slide" | "capture">>({});
+
+  // ستەیتی ستیکەرەکان
+  const [stickerPanelOpen, setStickerPanelOpen] = useState(false);
+  const [activeStickers, setActiveStickers] = useState<Record<string, string>>({});
+
   const busy = useRef(false);
   const alive = useRef(true);
+  const missedTurns = useRef<Record<string, number>>({});
+  const playersRef = useRef(players);
+  const handledTimeout = useRef<string | null>(null);
+  const reactionChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
+  playersRef.current = players;
 
   useEffect(() => {
     alive.current = true;
@@ -340,6 +234,62 @@ export function SnakesGame({
       alive.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    const loadStickers = (slots?: Array<string | null>) => {
+      const storedSlots = slots ?? (() => {
+        if (!user?.id) return null;
+        try {
+          const raw = localStorage.getItem(userStorageKey(user.id, "stickers"));
+          const parsed = raw ? JSON.parse(raw) : null;
+          return Array.isArray(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!storedSlots) {
+        setGameStickers(stickers);
+        return;
+      }
+      setGameStickers(storedSlots
+        .filter((url): url is string => typeof url === "string" && Boolean(url))
+        .map((url) => stickers.find((sticker) => sticker.image_url === url) ?? {
+          id: `persisted-sticker-${url}`,
+          name: "Saved sticker",
+          image_url: url,
+        }));
+    };
+
+    loadStickers();
+    const handleStickerUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; slots?: Array<string | null> }>).detail;
+      if (detail?.userId === user?.id) loadStickers(detail.slots);
+    };
+    window.addEventListener("user-stickers-updated", handleStickerUpdate);
+    return () => window.removeEventListener("user-stickers-updated", handleStickerUpdate);
+  }, [stickers, user?.id]);
+
+  const playCaptureSound = useCallback((soundUrl?: string | null) => {
+    if (!soundUrl) return;
+    const audio = new Audio(soundUrl);
+    audio.currentTime = 0;
+    void audio.play().catch((error) => console.error("Audio playback error:", error));
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase.channel(`snakes-ladders-match:${matchId}`);
+    channel.on("broadcast", { event: "PIECE_CAPTURED" }, ({ payload }) => {
+      playCaptureSound(payload?.soundUrl);
+    });
+    reactionChannelRef.current = channel;
+    void channel.subscribe();
+
+    return () => {
+      reactionChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [matchId, playCaptureSound]);
 
   useEffect(() => {
     if (phase !== "matchmaking") return;
@@ -351,84 +301,171 @@ export function SnakesGame({
     setPlayers((ps) => ps.map((p) => (p.id === id ? { ...p, position: pos } : p)));
   }, []);
 
+  const clearTokenMotion = useCallback((id: string, delayMs: number) => {
+    window.setTimeout(() => {
+      setTokenMotion((motions) => {
+        const next = { ...motions };
+        delete next[id];
+        return next;
+      });
+    }, delayMs);
+  }, []);
+
+  const nextTurnIndex = useCallback((from: number, roster: GamePlayer[]) => {
+    for (let offset = 1; offset <= roster.length; offset++) {
+      const candidate = roster[(from + offset) % roster.length];
+      if (candidate && !candidate.kicked) return (from + offset) % roster.length;
+    }
+    return from;
+  }, []);
+
+  const currentPlayer = players[turn];
+
+  useEffect(() => {
+    if (phase !== "playing" || winner || !currentPlayer || currentPlayer.kicked) return;
+
+    setTimeLeft(TURN_SECONDS);
+    const interval = window.setInterval(() => {
+      setTimeLeft((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [currentPlayer?.id, currentPlayer?.kicked, phase, timerRound, turn, winner]);
+
   const takeTurn = useCallback(
-    async (playerIndex: number) => {
+    async (playerIndex: number, automatic = false) => {
       if (busy.current || winner) return;
       busy.current = true;
 
       const index = playerIndex;
-      let again = true;
-      while (again && alive.current && !winner) {
-        again = false;
-        const current = players[index]!;
+      const current = players[index]!;
+      if (current.kicked) {
+        busy.current = false;
+        return;
+      }
+      if (!automatic) missedTurns.current[current.id] = 0;
 
-        setRolling(true);
-        for (let i = 0; i < 8; i++) {
-          setDice(1 + Math.floor(Math.random() * 6));
-          await delay(55);
-        }
-        const roll = 1 + Math.floor(Math.random() * 6);
-        setDice(roll);
-        setRolling(false);
-        await delay(180);
-        if (!alive.current) break;
+      setRolling(true);
+      for (let i = 0; i < 8; i++) {
+        setDice(1 + Math.floor(Math.random() * 6));
+        await delay(55);
+      }
+      const roll = 1 + Math.floor(Math.random() * 6);
+      setDice(roll);
+      setRolling(false);
+      await delay(180);
+      if (!alive.current) {
+        busy.current = false;
+        return;
+      }
 
-        let from = 0;
-        setPlayers((ps) => {
-          from = ps.find((p) => p.id === current.id)!.position;
-          return ps;
-        });
-        await delay(0);
-
-        let pos = from;
-        for (const step of walkPath(from, roll)) {
-          pos = step;
-          setPos(current.id, step);
-          await delay(STEP_MS);
-          if (!alive.current) return;
-        }
-
-        const jump = jumpFor(pos);
-        if (jump) {
-          setStatus(jump.kind === "ladder" ? `${current.name} بە پەیژە سەرکەوت!` : `${current.name} مار خواردی!`);
-          await delay(250);
-          pos = jump.to;
-          setPos(current.id, jump.to);
-          await delay(JUMP_MS);
-        }
+      let pos = current.position;
+      for (const step of walkPath(current.position, roll)) {
+        pos = step;
+        setPos(current.id, step);
+        await delay(STEP_MS);
         if (!alive.current) return;
+      }
 
-        let eaten: string[] = [];
-        setPlayers((ps) => {
-          eaten = ps.filter((p) => p.id !== current.id && p.position === pos && pos > 0).map((p) => p.name);
-          return ps.map((p) =>
-            p.id !== current.id && p.position === pos && pos > 0 ? { ...p, position: 0 } : p,
-          );
-        });
-        if (eaten.length) {
-          setStatus(`${current.name} ${eaten.join(" و ")}ی خوارد!`);
-          await delay(500);
+      const jump = jumpFor(pos);
+      if (jump) {
+        setStatus(jump.kind === "ladder" ? `${current.name} بە پەیژە سەرکەوت!` : `${current.name} مار خواردی!`);
+        await delay(250);
+        if (jump.kind === "ladder") {
+          setTokenMotion((motions) => ({ ...motions, [current.id]: "climb" }));
+        } else {
+          setTokenMotion((motions) => ({ ...motions, [current.id]: "slide" }));
         }
+        pos = jump.to;
+        setPos(current.id, jump.to);
+        await delay(JUMP_MS);
+        clearTokenMotion(current.id, 0);
+      }
+      if (!alive.current) return;
 
-        if (pos === LAST_SQUARE) {
-          setWinner({ ...current, position: pos });
-          busy.current = false;
-          return;
+      const capturedPlayers = playersRef.current.filter(
+        (player) => player.id !== current.id && player.position === pos && pos > 0,
+      );
+      const eaten = capturedPlayers.map((player) => player.name);
+      if (capturedPlayers.length) {
+        if (current.id === "me") {
+          const captureEvent = {
+            type: "CAPTURE_PIECE",
+            attackerId: user?.id ?? current.id,
+            soundUrl: user?.id ? localStorage.getItem(userStorageKey(user.id, "active_sound")) : null,
+            targetId: capturedPlayers[0]?.id,
+            capturedPlayerIds: capturedPlayers.map((player) => player.id),
+            at: Date.now(),
+          };
+          playCaptureSound(captureEvent.soundUrl);
+          void reactionChannelRef.current?.send({
+            type: "broadcast",
+            event: "PIECE_CAPTURED",
+            payload: captureEvent,
+          });
         }
+        setTokenMotion((motions) => ({
+          ...motions,
+          ...Object.fromEntries(capturedPlayers.map((player) => [player.id, "capture"])),
+        }));
+        capturedPlayers.forEach((player) => clearTokenMotion(player.id, 700));
+      }
+      setPlayers((ps) => {
+        return ps.map((p) =>
+          p.id !== current.id && p.position === pos && pos > 0 ? { ...p, position: 0 } : p,
+        );
+      });
+      if (eaten.length) {
+        setStatus(`${current.name} ${eaten.join(" و ")}ی خوارد!`);
+        await delay(500);
+      }
 
-        if (roll === 6) {
-          setStatus(`${current.name} شەشی هێنا — جارێکی تر!`);
-          again = true;
-          await delay(500);
-        }
+      if (pos === LAST_SQUARE) {
+        setWinner({ ...current, position: pos });
+        busy.current = false;
+        return;
+      }
+
+      // یاسای ژمارە ٦: نۆرە ناگۆڕێت و یاریزان خۆی دیسان زارەکە دەداتەوە
+      if (roll === 6) {
+        setStatus(`${current.name} ٦ی هێنا — جارێکی تر!`);
+        busy.current = false;
+        setTimeLeft(TURN_SECONDS);
+        setTimerRound((round) => round + 1);
+        return;
       }
 
       busy.current = false;
-      setTurn((index + 1) % players.length);
+      setTurn(nextTurnIndex(index, players));
       setStatus("");
     },
-    [players, setPos, winner],
+    [nextTurnIndex, playCaptureSound, players, setPos, user?.id, winner],
   );
+
+  useEffect(() => {
+    if (timeLeft !== 0 || !currentPlayer || winner || busy.current) return;
+    const timeoutKey = `${currentPlayer.id}:${timerRound}`;
+    if (handledTimeout.current === timeoutKey) return;
+    handledTimeout.current = timeoutKey;
+
+    const misses = (missedTurns.current[currentPlayer.id] ?? 0) + 1;
+    missedTurns.current[currentPlayer.id] = misses;
+    if (misses >= 3) {
+      const playerId = currentPlayer.id;
+      const playerName = currentPlayer.name;
+      const roster = playersRef.current;
+      setPlayers((ps) =>
+        ps.map((p) => (p.id === playerId ? { ...p, position: 0, kicked: true } : p)),
+      );
+      setStatus(`${playerName} Left`);
+      busy.current = false;
+      setTurn(nextTurnIndex(turn, roster));
+      setTimerRound((round) => round + 1);
+      return;
+    }
+
+    void takeTurn(turn, true);
+  }, [currentPlayer, nextTurnIndex, takeTurn, timeLeft, timerRound, turn, winner]);
 
   useEffect(() => {
     if (phase !== "playing" || winner) return;
@@ -438,161 +475,239 @@ export function SnakesGame({
     return () => clearTimeout(t);
   }, [phase, turn, winner, players, takeTurn]);
 
-  const myTurn = players[turn]?.isHuman && !winner && !busy.current;
+  const handleSendSticker = (stickerUrl: string) => {
+    setActiveStickers(prev => ({ ...prev, me: stickerUrl }));
+    setStickerPanelOpen(false);
+    
+    // مانەوە بۆ ماوەی ٣ چرکە و پاشان سڕینەوەی
+    setTimeout(() => {
+      setActiveStickers(prev => {
+        const next = { ...prev };
+        delete next["me"];
+        return next;
+      });
+    }, 3000);
+  };
+
+  const myTurn = players[turn]?.isHuman && !players[turn]?.kicked && !winner && !busy.current;
+  const timerVisible = phase === "playing" && !!currentPlayer && !currentPlayer.kicked && !winner && !rolling && !busy.current;
   const meP = players[0]!;
   const opponents = players.slice(1);
+  const myTurnActive = players[turn]?.id === meP.id;
+  const boardImageUrl = board?.image_url || "";
 
   return (
     <div
       dir="rtl"
-      className="animate-soft-in fixed inset-0 z-50 mx-auto flex w-full max-w-2xl flex-col overflow-y-auto overflow-x-hidden px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="animate-soft-in fixed inset-0 z-50 mx-auto flex h-[100dvh] w-full max-w-2xl flex-col overflow-hidden px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       style={{
         background:
-          "radial-gradient(120% 80% at 50% 0%, #f7ecd9 0%, #f1e2c8 55%, #e9d9bd 100%)",
+          "radial-gradient(135% 85% at 50% 8%, #fff9ee 0%, #f4e8d3 52%, #e8d6b9 100%)",
       }}
     >
       <style>{`
-@keyframes sg-shake { 0%{transform:rotate(-12deg) translateY(0)} 50%{transform:rotate(14deg) translateY(-4px)} 100%{transform:rotate(-12deg) translateY(0)} }
 @keyframes sg-fall { 0%{transform:translateY(0) rotate(0)} 100%{transform:translateY(115vh) rotate(720deg)} }
 @keyframes sg-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+@keyframes sg-pulse-subtle { 0%,100%{transform:scale(1)} 50%{transform:scale(1.015)} }
 @keyframes sg-radar { 0%{transform:scale(.4);opacity:.9} 100%{transform:scale(2.4);opacity:0} }
-@keyframes sg-slither { 0%,100%{transform:rotate(-1.2deg)} 50%{transform:rotate(1.2deg)} }
 @keyframes sg-pop { 0%{transform:scale(.6);opacity:0} 25%{transform:scale(1.05);opacity:1} 80%{opacity:1} 100%{transform:scale(1);opacity:0} }
+@keyframes sg-hop { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-24%)} }
+@keyframes sg-capture { 0%{transform:translateY(0) scale(1)} 35%{transform:translateY(-40%) scale(1.04)} 100%{transform:translateY(0) scale(.92)} }
+@keyframes sg-lobby-exit { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(.96)} }
+@keyframes sg-timer-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
 `}</style>
 
-      {/* leafy decorations */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute -left-10 top-24 size-40 rounded-full bg-[#8cc06a]/25 blur-2xl" />
-        <div className="absolute -right-12 top-1/2 size-44 rounded-full bg-[#6fae55]/20 blur-2xl" />
-        <div className="absolute bottom-4 -left-8 size-36 rounded-full bg-[#7cb85f]/25 blur-2xl" />
-      </div>
-
       {/* top bar */}
-      <div className="relative flex items-center justify-between mt-2">
+      <div className="relative mt-1 flex shrink-0 items-center justify-between px-1 z-40">
         <button
           onClick={onClose}
           aria-label="گەڕانەوە"
-          className="press flex size-11 items-center justify-center rounded-full bg-white text-[#c0392b] shadow-md"
+          className="press flex size-9 items-center justify-center rounded-full bg-white text-[#c0392b] shadow-md"
         >
-          <ArrowRight className="size-5" />
+          <ArrowRight className="size-4 md:size-5" />
         </button>
-        <div className="flex items-center gap-2 rounded-full border-2 border-[#c0392b] bg-white px-4 py-2 shadow-md">
-          <span className="size-2.5 rounded-full bg-[#c0392b]" />
-          <span className="text-sm font-extrabold text-[#2c2c2c]">
-            {myTurn ? "نۆرەی تۆیە" : `نۆرەی ${players[turn]?.name ?? ""}`}
-          </span>
+        <div className="flex flex-col items-center">
+          <div
+            className="flex items-center gap-1.5 rounded-full border-2 bg-white px-3 py-1.5 shadow-md"
+            style={{ borderColor: players[turn]?.color.from || "#c0392b" }}
+          >
+            <span
+              className="size-2 rounded-full"
+              style={{ background: players[turn]?.color.from || "#c0392b" }}
+            />
+            <span className="text-[11px] md:text-sm font-extrabold text-[#2c2c2c]">
+              {myTurn ? "نۆرەی تۆیە" : `نۆرەی ${players[turn]?.name ?? ""}`}
+            </span>
+          </div>
         </div>
-        <span className="size-11" />
+        <span className="size-9" />
       </div>
 
       {phase === "matchmaking" ? (
-        <Matchmaking players={players} />
+        <Matchmaking players={players} onExit={onClose} />
       ) : (
-        <>
+        <div className="my-1 flex flex-1 flex-col justify-between overflow-visible relative">
+          
+          {/* پەنجەرەی ستیکەرەکان */}
+          <div
+            className={`absolute bottom-16 left-0 z-50 flex items-center transition-transform duration-300 ease-in-out ${
+              stickerPanelOpen ? "translate-x-0" : "-translate-x-[calc(100%-2.5rem)]"
+            }`}
+            dir="ltr"
+          >
+            <div className="flex items-center rounded-r-2xl bg-white/95 backdrop-blur-md p-1.5 shadow-xl border border-black/10 border-l-0">
+              <div className="flex gap-2 max-w-[220px] overflow-x-auto no-scrollbar px-1 py-0.5">
+                {gameStickers.length > 0 ? (
+                  gameStickers.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSendSticker(s.image_url)}
+                      className="press size-11 shrink-0 rounded-xl overflow-hidden bg-black/5 p-1"
+                    >
+                      <img src={s.image_url} alt="sticker" className="size-full object-contain" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs font-bold text-center text-muted-foreground whitespace-nowrap px-2">
+                    هیچ ستیکەرێک نییە
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={() => setStickerPanelOpen(!stickerPanelOpen)}
+                className="press flex size-8 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-black/5 ml-1"
+                aria-label="ستیکەرەکان"
+              >
+                {stickerPanelOpen ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
+              </button>
+            </div>
+          </div>
+
           {/* opponents */}
-          <div className="relative mt-4 grid grid-cols-3 gap-3">
+          <div className="relative mt-1 flex w-full shrink-0 justify-between gap-1.5 px-1 z-30">
             {opponents.map((p) => {
               const active = players[turn]?.id === p.id;
               return (
-                <div
-                  key={p.id}
-                  className="rounded-2xl bg-white p-2 text-center shadow-[0_6px_14px_rgba(0,0,0,.10)]"
-                  style={{
-                    outline: active ? "2px solid #c0392b" : "none",
-                    animation: active ? "sg-pulse 1.3s ease-in-out infinite" : undefined,
-                  }}
-                >
-                  <div className="relative mx-auto size-10 md:size-12">
-                    <img src={p.avatar} alt={p.name} className="size-full rounded-full object-cover" />
-                    <span
-                      className="absolute -bottom-0.5 -left-0.5 size-3 rounded-full border-2 border-white"
-                      style={{ background: p.color.from }}
-                    />
+                <div key={p.id} className="relative flex-1">
+                  <div
+                    className="relative flex items-center gap-1.5 rounded-xl bg-white p-1 shadow-sm transition-all"
+                    style={{
+                      border: active ? `2px solid ${p.color.from}` : "2px solid transparent",
+                      boxShadow: active ? `0 0 12px ${p.color.from}` : "0 2px 4px rgba(0,0,0,.05)",
+                    }}
+                  >
+                    <PlayerAvatar player={p} />
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
+                      <p className="truncate text-[10px] font-bold text-[#2c2c2c]">{p.name}</p>
+                      <span className="mt-0.5 inline-block w-max rounded bg-[#f4f1e6] px-1 py-0.5 text-[9px] font-bold text-[#8a6d1f]">
+                        {p.position}/100
+                      </span>
+                    </div>
+                    {timerVisible && players[turn]?.id === p.id && (
+                      <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                        <TurnTimer value={timeLeft} />
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-1.5 truncate text-[12px] font-bold text-[#2c2c2c]">{p.name}</p>
-                  <span className="mt-1 inline-block rounded-full bg-[#f4f1e6] px-2 py-0.5 text-[10px] md:text-xs font-bold text-[#8a6d1f]">
-                    {p.position}
-                  </span>
                 </div>
               );
             })}
           </div>
 
-          {/* board */}
-          <div
-            dir="ltr"
-            className="relative mt-4 aspect-square w-full rounded-[16px] p-[3px] md:p-1"
-            style={{ background: "#ffffff", boxShadow: "0 14px 30px rgba(0,0,0,.18)" }}
-          >
-            <div className="relative size-full">
-              <BoardGrid />
-              <Ladders />
-              <Snakes />
-              {players.map((p, i) => (
-                <Token key={p.id} player={p} offset={i} />
-              ))}
+          {/* board (وێنەی تەختە لە ئەدمینەوە) */}
+          <div className="relative my-1 flex min-h-0 w-full flex-1 items-center justify-center overflow-visible px-1 py-2 z-20 [container-type:size]">
+            <div
+              dir="ltr"
+              className="relative translate-y-[clamp(0.25rem,1.2vh,0.75rem)] overflow-visible rounded-[16px] bg-white p-1 shadow-[0_12px_30px_rgba(91,61,28,.2)]"
+              style={{
+                aspectRatio: "1 / 1",
+                width: "min(100%, 100cqh)",
+                maxWidth: "100%",
+                maxHeight: "100%",
+                flexShrink: 1
+              }}
+            >
+              {boardImageUrl && (
+                <img
+                  src={boardImageUrl}
+                  alt={board.name}
+                  className="absolute inset-1 size-[calc(100%-0.5rem)] object-cover"
+                />
+              )}
+              <div className="absolute inset-1 z-10">
+                {players.map((p, i) => (
+                  <Token
+                    key={p.id}
+                    player={p}
+                    offset={i}
+                    {...(tokenMotion[p.id] ? { motion: tokenMotion[p.id] } : {})}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
-          <p className="mt-3 h-5 text-center text-xs font-bold text-[#6b5a3e]">{status}</p>
+          <p className="mt-1 h-4 shrink-0 text-center text-xs font-bold text-[#6b5a3e]">{status}</p>
+
+          {/* نیشاندانی ستیکەر لە ناوەڕاست و کەمێک سەرووی زارەکە بەتەواوی بێجووڵە */}
+          {Object.entries(activeStickers).length > 0 && (
+            <div className="absolute left-1/2 bottom-36 z-[100] -translate-x-1/2 pointer-events-none">
+              {Object.entries(activeStickers).map(([id, url]) => (
+                <img 
+                  key={id} 
+                  src={url} 
+                  alt="sticker" 
+                  className="size-28 md:size-32 object-contain drop-shadow-2xl" 
+                />
+              ))}
+            </div>
+          )}
 
           {/* dice */}
-          <div className="relative mt-2 flex items-center justify-center">
+          <div className="relative mt-1 mb-2.5 flex shrink-0 items-center justify-center z-30">
             <button
               onClick={() => void takeTurn(turn)}
               disabled={!myTurn}
               aria-label="تاوەدان"
               className="press disabled:opacity-50"
             >
-              <DiceFace value={dice} rolling={rolling} />
+              <DiceFace value={dice} />
             </button>
-            {reaction && (
-              <span
-                className="pointer-events-none absolute -top-6 rounded-full bg-white px-3 py-1 text-sm font-bold text-[#2c2c2c] shadow"
-                style={{ animation: "sg-pop 1.8s ease-out forwards" }}
-              >
-                {reaction}
-              </span>
-            )}
-          </div>
-
-          {/* reactions */}
-          <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-2">
-            {REACTIONS.map((r) => (
-              <button
-                key={r}
-                onClick={() => {
-                  setReaction(r);
-                  setTimeout(() => setReaction(null), 1800);
-                }}
-                className="press shrink-0 rounded-full border border-[#8cc06a]/50 bg-[#8cc06a]/25 px-5 py-2.5 text-sm md:text-base font-bold text-[#33502a] backdrop-blur-sm"
-              >
-                {r}
-              </button>
-            ))}
           </div>
 
           {/* my bar */}
-          <div className="mt-4 mb-4 flex items-center gap-4 rounded-2xl border-2 border-[#c0392b] bg-white p-3 shadow-[0_8px_18px_rgba(0,0,0,.12)]">
-            <img
-              src={meP.avatar}
-              alt={meP.name}
-              className="size-12 md:size-14 rounded-full border-2 border-[#c0392b] object-cover"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-extrabold text-[#2c2c2c]">{meP.name}</p>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#eee8dc]">
-                <div
-                  className="h-full rounded-full bg-[#c0392b] transition-all duration-300"
-                  style={{ width: `${meP.position}%` }}
-                />
+          <div className="relative z-30">
+            <div 
+              className="relative mb-1 ml-auto flex w-[calc(100%-1.5rem)] shrink-0 items-center gap-2 rounded-xl bg-white px-2.5 py-1.5 pl-12 transition-all"
+              style={{
+                border: myTurnActive ? `2px solid ${meP.color.from}` : "2px solid transparent",
+                boxShadow: myTurnActive ? `0 0 12px ${meP.color.from}` : "0 3px 8px rgba(0,0,0,.08)",
+              }}
+            >
+              <div className="relative">
+                    <PlayerAvatar player={meP} pro={isProMember && !!user?.id && meP.id === "me"} />
               </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold text-[#2c2c2c]">{meP.name}</p>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#eee8dc]">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${meP.position}%`, background: meP.color.from }}
+                  />
+                </div>
+              </div>
+              <span className="rounded-md bg-[#f4f1e6] px-2 py-0.5 text-[11px] font-bold text-[#8a6d1f]">
+                {meP.position}/100
+              </span>
+              {timerVisible && myTurnActive && (
+                <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                  <TurnTimer value={timeLeft} />
+                </div>
+              )}
             </div>
-            <span className="rounded-full bg-[#f4f1e6] px-3 py-1 text-sm font-bold text-[#8a6d1f]">
-              {meP.position}/100
-            </span>
           </div>
-        </>
+        </div>
       )}
 
       {winner && <WinOverlay winner={winner} onClose={onClose} />}
@@ -600,8 +715,9 @@ export function SnakesGame({
   );
 }
 
-function Matchmaking({ players }: { players: GamePlayer[] }) {
+function Matchmaking({ players, onExit }: { players: GamePlayer[]; onExit: () => void }) {
   const [found, setFound] = useState(1);
+  const [exiting, setExiting] = useState(false);
   useEffect(() => {
     const t1 = setTimeout(() => setFound(2), 800);
     const t2 = setTimeout(() => setFound(3), 1500);
@@ -612,8 +728,18 @@ function Matchmaking({ players }: { players: GamePlayer[] }) {
       clearTimeout(t3);
     };
   }, []);
+
+  const handleExit = () => {
+    if (exiting) return;
+    setExiting(true);
+    window.setTimeout(onExit, 260);
+  };
+
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center gap-6">
+    <div
+      className="relative flex flex-1 flex-col items-center justify-center gap-6"
+      style={{ animation: exiting ? "sg-lobby-exit .26s ease-in forwards" : undefined }}
+    >
       <div className="relative grid size-28 place-items-center">
         {[0, 1, 2].map((i) => (
           <span
@@ -640,6 +766,14 @@ function Matchmaking({ players }: { players: GamePlayer[] }) {
         ))}
       </div>
       <p className="text-sm text-[#8a7c66]">{found}/4 یاریزان ئامادەن</p>
+      <button
+        type="button"
+        onClick={handleExit}
+        disabled={exiting}
+        className="press mt-2 min-w-40 rounded-xl border-2 border-[#c0392b]/65 bg-white/75 px-12 py-3 text-base font-extrabold text-[#a93226] shadow-sm transition-colors hover:bg-[#fff5f3] disabled:opacity-60"
+      >
+        دەرچوون
+      </button>
     </div>
   );
 }
