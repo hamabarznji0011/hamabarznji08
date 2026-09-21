@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Crown, UserPlus } from "lucide-react";
-import { toast } from "sonner";
+import { Crown } from "lucide-react";
 import { globalPlayers, useApp, type Player } from "@/lib/app-store";
-import { GoldPill } from "@/components/GoldCounter";
-import { useHideChrome } from "@/components/chrome";
+import { PlayerProfileSheet } from "@/components/PlayerProfileSheet";
 
 export const Route = createFileRoute("/app/leaderboards")({
   head: () => ({
@@ -58,6 +56,8 @@ function LeaderboardsTab() {
     () => ({
       id: "me",
       name: user?.name ?? "تۆ",
+      handle: user?.handle ?? "",
+      online: user?.online ?? true,
       avatar: user?.avatar ?? "",
       points: user?.points ?? 0,
       gold,
@@ -72,8 +72,7 @@ function LeaderboardsTab() {
       const d = drift[p.id];
       return d ? { ...p, points: p.points + d.points, gold: p.gold + d.gold } : p;
     };
-    const base =
-      tab === "friends" ? [...visibleFriends, me] : [...globalPlayers, me];
+    const base = tab === "friends" ? [...visibleFriends, me] : [...globalPlayers, me];
     const list = base.map(live);
     return tab === "gold"
       ? list.sort((a, b) => b.gold - a.gold)
@@ -109,16 +108,33 @@ function LeaderboardsTab() {
           >
             <span className="w-6 text-center text-sm font-extrabold text-primary">{i + 1}</span>
             {p.avatar ? (
-              <img src={p.avatar} alt={p.name} className={`size-9 rounded-full bg-secondary ${p.id === "me" && isProMember && equippedProFrame ? "border-2 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,.8)]" : ""}`} />
+              <button
+                onClick={() => setSelected(p)}
+                className="press shrink-0"
+                aria-label={`پرۆفایلی ${p.name}`}
+              >
+                <img
+                  src={p.avatar}
+                  alt={p.name}
+                  className={`size-9 rounded-full bg-secondary ${p.id === "me" && isProMember && equippedProFrame ? "border-2 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,.8)]" : ""}`}
+                />
+              </button>
             ) : (
               <span className="size-9 rounded-full bg-secondary" />
             )}
-            <button
-              onClick={() => setSelected(p)}
-              className="press flex-1 text-right font-bold"
-            >
-              <span className={p.id === "me" && isProMember ? "bg-gradient-to-r from-yellow-200 to-amber-600 bg-clip-text text-transparent" : ""}>{p.name}</span>
-              {p.id === "me" && isProMember && <Crown className="mr-1 inline size-3 text-yellow-500" />}
+            <button onClick={() => setSelected(p)} className="press flex-1 text-right font-bold">
+              <span
+                className={
+                  p.id === "me" && isProMember
+                    ? "bg-gradient-to-r from-yellow-200 to-amber-600 bg-clip-text text-transparent"
+                    : ""
+                }
+              >
+                {p.name}
+              </span>
+              {p.id === "me" && isProMember && (
+                <Crown className="mr-1 inline size-3 text-yellow-500" />
+              )}
               {p.id === "me" && <span className="mr-2 text-xs text-primary">(تۆ)</span>}
             </button>
             <span className="text-sm font-bold tabular-nums text-gold transition-all duration-500">
@@ -128,91 +144,15 @@ function LeaderboardsTab() {
         ))}
       </div>
 
-      {selected && <PlayerSheet player={selected} onClose={() => setSelected(null)} />}
-    </section>
-  );
-}
-
-function PlayerSheet({ player, onClose }: { player: Player; onClose: () => void }) {
-  const { requestFriend } = useApp();
-  const isMe = player.id === "me";
-  const [zoomed, setZoomed] = useState(false);
-
-  useHideChrome();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end bg-background/60" onClick={onClose}>
-      {zoomed && player.avatar && (
-        <div
-          className="animate-soft-in fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
-          onClick={(e) => {
-            e.stopPropagation();
-            setZoomed(false);
-          }}
-        >
-          <img src={player.avatar} alt={player.name} className="max-h-[80vh] w-[85%] max-w-md object-contain" />
-        </div>
+      {selected && (
+        <PlayerProfileSheet
+          player={selected}
+          followersCount={visibleFriends.length}
+          followingCount={visibleFriends.length}
+          allowFriendRequest
+          onClose={() => setSelected(null)}
+        />
       )}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="panel animate-sheet-up mx-auto h-1/2 w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl p-5 shadow-[var(--shadow-glass)]"
-      >
-        <div className="flex items-start justify-between">
-          <GoldPill amount={player.gold} />
-          <div className="mt-2 h-1.5 w-12 rounded-full bg-panel-border" />
-          {isMe ? (
-            <span className="w-11" />
-          ) : (
-            <button
-              onClick={() => {
-                const res = requestFriend(player);
-                toast[res === "added" ? "success" : "error"](
-                  res === "added" ? "داواکاری نێردرا" : "پێشتر هەیە",
-                );
-              }}
-              aria-label="زیادکردنی هاوڕێ"
-              className="press flex size-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-            >
-              <UserPlus className="size-5" />
-            </button>
-          )}
-        </div>
-
-        <div className="mt-4 flex flex-col items-center">
-          {player.avatar ? (
-            <button
-              type="button"
-              onClick={() => setZoomed(true)}
-              aria-label="گەورەکردنی وێنە"
-              className="press"
-            >
-              <img
-                src={player.avatar}
-                alt={player.name}
-                className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5"
-              />
-            </button>
-          ) : (
-            <span className="size-20 rounded-full border-2 border-panel-border bg-panel-foreground/5" />
-          )}
-          <h3 className="mt-2 text-xl font-extrabold text-panel-foreground">{player.name}</h3>
-        </div>
-
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <Cell label="یارییەکان" value={player.games} />
-          <Cell label="دۆڕان" value={player.games - player.wins} />
-          <Cell label="زێڕ" value={player.gold} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Cell({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-panel-border bg-panel-foreground/5 p-3 text-center">
-      <p className="text-xl font-extrabold tabular-nums text-panel-foreground">{value}</p>
-      <p className="mt-1 text-[11px] text-panel-muted">{label}</p>
-    </div>
+    </section>
   );
 }

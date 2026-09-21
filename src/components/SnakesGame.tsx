@@ -13,6 +13,7 @@ import {
 import type { BoardSkin } from "@/lib/game-data";
 import { useHideChrome } from "@/components/chrome";
 import { useApp, userStorageKey } from "@/lib/app-store";
+import { PlayerProfileSheet } from "@/components/PlayerProfileSheet";
 import { createClient } from "@supabase/supabase-js";
 
 const STEP_MS = 220;
@@ -55,14 +56,19 @@ function Token({
         key={player.position}
         className="size-full overflow-hidden rounded-full"
         style={{
-          animation: motion === "capture"
-            ? "sg-capture 700ms cubic-bezier(.3,.9,.35,1)"
-            : on
-              ? `sg-hop ${motion === "climb" || motion === "slide" ? JUMP_MS : STEP_MS}ms cubic-bezier(.3,.9,.35,1)`
-              : undefined,
+          animation:
+            motion === "capture"
+              ? "sg-capture 700ms cubic-bezier(.3,.9,.35,1)"
+              : on
+                ? `sg-hop ${motion === "climb" || motion === "slide" ? JUMP_MS : STEP_MS}ms cubic-bezier(.3,.9,.35,1)`
+                : undefined,
         }}
       >
-        <img src={player.token_url || player.avatar} alt="token" className="size-full object-cover" />
+        <img
+          src={player.token_url || player.avatar}
+          alt="token"
+          className="size-full object-cover"
+        />
       </div>
     </div>
   );
@@ -72,17 +78,42 @@ function Token({
 
 const PIPS: Record<number, [number, number][]> = {
   1: [[50, 50]],
-  2: [[30, 30],[70, 70]],
-  3: [[28, 28],[50, 50],[72, 72]],
-  4: [[30, 30],[70, 30],[30, 70],[70, 70]],
-  5: [[30, 30],[70, 30],[50, 50],[30, 70],[70, 70]],
-  6: [[30, 26],[70, 26],[30, 50],[70, 50],[30, 74],[70, 74]],
+  2: [
+    [30, 30],
+    [70, 70],
+  ],
+  3: [
+    [28, 28],
+    [50, 50],
+    [72, 72],
+  ],
+  4: [
+    [30, 30],
+    [70, 30],
+    [30, 70],
+    [70, 70],
+  ],
+  5: [
+    [30, 30],
+    [70, 30],
+    [50, 50],
+    [30, 70],
+    [70, 70],
+  ],
+  6: [
+    [30, 26],
+    [70, 26],
+    [30, 50],
+    [70, 50],
+    [30, 74],
+    [70, 74],
+  ],
 };
 
 function DiceFace({ value }: { value: number }) {
   return (
     <div
-    className="grid size-[48px] md:size-[54px] place-items-center rounded-[12px]"
+      className="grid size-[48px] md:size-[54px] place-items-center rounded-[12px]"
       style={{
         background: "linear-gradient(155deg,#ffffff,#f4f1e6 60%,#ded9c7)",
         boxShadow:
@@ -106,7 +137,11 @@ function PlayerAvatar({ player, pro = false }: { player: GamePlayer; pro?: boole
         alt={player.name}
         className={`size-full rounded-md object-cover border ${pro ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,.8)]" : "border-black/5"} ${player.kicked ? "grayscale" : ""}`}
       />
-      {pro && <span className="absolute -right-2 -top-2 flex size-4 items-center justify-center rounded-full bg-yellow-300 text-yellow-950"><Crown className="size-2.5" /></span>}
+      {pro && (
+        <span className="absolute -right-2 -top-2 flex size-4 items-center justify-center rounded-full bg-yellow-300 text-yellow-950">
+          <Crown className="size-2.5" />
+        </span>
+      )}
       {player.kicked && (
         <>
           <span className="pointer-events-none absolute left-[-10%] right-[-10%] top-1/2 h-0.5 rotate-[-18deg] bg-[#c0392b]" />
@@ -189,14 +224,14 @@ export function SnakesGame({
   const [phase, setPhase] = useState<"matchmaking" | "playing">("matchmaking");
   const [gameStickers, setGameStickers] = useState(stickers);
   const [players, setPlayers] = useState<GamePlayer[]>(() => [
-    { 
-      id: "me", 
-      name: me.name, 
-      avatar: me.avatar, 
-      color: PLAYER_COLORS[0]!, 
-      isHuman: true, 
+    {
+      id: "me",
+      name: me.name,
+      avatar: me.avatar,
+      color: PLAYER_COLORS[0]!,
+      isHuman: true,
       position: 0,
-      token_url: me.token_url 
+      token_url: me.token_url,
     } as any,
     ...BOT_NAMES.map((n, i) => ({
       id: `bot-${i}`,
@@ -212,6 +247,7 @@ export function SnakesGame({
   const [rolling, setRolling] = useState(false);
   const [status, setStatus] = useState("");
   const [winner, setWinner] = useState<GamePlayer | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<GamePlayer | null>(null);
   const [timeLeft, setTimeLeft] = useState(TURN_SECONDS);
   const [timerRound, setTimerRound] = useState(0);
   const [tokenMotion, setTokenMotion] = useState<Record<string, "climb" | "slide" | "capture">>({});
@@ -225,7 +261,9 @@ export function SnakesGame({
   const missedTurns = useRef<Record<string, number>>({});
   const playersRef = useRef(players);
   const handledTimeout = useRef<string | null>(null);
-  const reactionChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
+  const reactionChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(
+    null,
+  );
   playersRef.current = players;
 
   useEffect(() => {
@@ -237,32 +275,40 @@ export function SnakesGame({
 
   useEffect(() => {
     const loadStickers = (slots?: Array<string | null>) => {
-      const storedSlots = slots ?? (() => {
-        if (!user?.id) return null;
-        try {
-          const raw = localStorage.getItem(userStorageKey(user.id, "stickers"));
-          const parsed = raw ? JSON.parse(raw) : null;
-          return Array.isArray(parsed) ? parsed : null;
-        } catch {
-          return null;
-        }
-      })();
+      const storedSlots =
+        slots ??
+        (() => {
+          if (!user?.id) return null;
+          try {
+            const raw = localStorage.getItem(userStorageKey(user.id, "stickers"));
+            const parsed = raw ? JSON.parse(raw) : null;
+            return Array.isArray(parsed) ? parsed : null;
+          } catch {
+            return null;
+          }
+        })();
       if (!storedSlots) {
         setGameStickers(stickers);
         return;
       }
-      setGameStickers(storedSlots
-        .filter((url): url is string => typeof url === "string" && Boolean(url))
-        .map((url) => stickers.find((sticker) => sticker.image_url === url) ?? {
-          id: `persisted-sticker-${url}`,
-          name: "Saved sticker",
-          image_url: url,
-        }));
+      setGameStickers(
+        storedSlots
+          .filter((url): url is string => typeof url === "string" && Boolean(url))
+          .map(
+            (url) =>
+              stickers.find((sticker) => sticker.image_url === url) ?? {
+                id: `persisted-sticker-${url}`,
+                name: "Saved sticker",
+                image_url: url,
+              },
+          ),
+      );
     };
 
     loadStickers();
     const handleStickerUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ userId?: string; slots?: Array<string | null> }>).detail;
+      const detail = (event as CustomEvent<{ userId?: string; slots?: Array<string | null> }>)
+        .detail;
       if (detail?.userId === user?.id) loadStickers(detail.slots);
     };
     window.addEventListener("user-stickers-updated", handleStickerUpdate);
@@ -369,7 +415,11 @@ export function SnakesGame({
 
       const jump = jumpFor(pos);
       if (jump) {
-        setStatus(jump.kind === "ladder" ? `${current.name} بە پەیژە سەرکەوت!` : `${current.name} مار خواردی!`);
+        setStatus(
+          jump.kind === "ladder"
+            ? `${current.name} بە پەیژە سەرکەوت!`
+            : `${current.name} مار خواردی!`,
+        );
         await delay(250);
         if (jump.kind === "ladder") {
           setTokenMotion((motions) => ({ ...motions, [current.id]: "climb" }));
@@ -392,7 +442,9 @@ export function SnakesGame({
           const captureEvent = {
             type: "CAPTURE_PIECE",
             attackerId: user?.id ?? current.id,
-            soundUrl: user?.id ? localStorage.getItem(userStorageKey(user.id, "active_sound")) : null,
+            soundUrl: user?.id
+              ? localStorage.getItem(userStorageKey(user.id, "active_sound"))
+              : null,
             targetId: capturedPlayers[0]?.id,
             capturedPlayerIds: capturedPlayers.map((player) => player.id),
             at: Date.now(),
@@ -476,12 +528,12 @@ export function SnakesGame({
   }, [phase, turn, winner, players, takeTurn]);
 
   const handleSendSticker = (stickerUrl: string) => {
-    setActiveStickers(prev => ({ ...prev, me: stickerUrl }));
+    setActiveStickers((prev) => ({ ...prev, me: stickerUrl }));
     setStickerPanelOpen(false);
-    
+
     // مانەوە بۆ ماوەی ٣ چرکە و پاشان سڕینەوەی
     setTimeout(() => {
-      setActiveStickers(prev => {
+      setActiveStickers((prev) => {
         const next = { ...prev };
         delete next["me"];
         return next;
@@ -490,7 +542,13 @@ export function SnakesGame({
   };
 
   const myTurn = players[turn]?.isHuman && !players[turn]?.kicked && !winner && !busy.current;
-  const timerVisible = phase === "playing" && !!currentPlayer && !currentPlayer.kicked && !winner && !rolling && !busy.current;
+  const timerVisible =
+    phase === "playing" &&
+    !!currentPlayer &&
+    !currentPlayer.kicked &&
+    !winner &&
+    !rolling &&
+    !busy.current;
   const meP = players[0]!;
   const opponents = players.slice(1);
   const myTurnActive = players[turn]?.id === meP.id;
@@ -501,8 +559,7 @@ export function SnakesGame({
       dir="rtl"
       className="animate-soft-in fixed inset-0 z-50 mx-auto flex h-[100dvh] w-full max-w-2xl flex-col overflow-hidden px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       style={{
-        background:
-          "radial-gradient(135% 85% at 50% 8%, #fff9ee 0%, #f4e8d3 52%, #e8d6b9 100%)",
+        background: "radial-gradient(135% 85% at 50% 8%, #fff9ee 0%, #f4e8d3 52%, #e8d6b9 100%)",
       }}
     >
       <style>{`
@@ -547,7 +604,6 @@ export function SnakesGame({
         <Matchmaking players={players} onExit={onClose} />
       ) : (
         <div className="my-1 flex flex-1 flex-col justify-between overflow-visible relative">
-          
           {/* پەنجەرەی ستیکەرەکان */}
           <div
             className={`absolute bottom-16 left-0 z-50 flex items-center transition-transform duration-300 ease-in-out ${
@@ -579,7 +635,11 @@ export function SnakesGame({
                 className="press flex size-8 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-black/5 ml-1"
                 aria-label="ستیکەرەکان"
               >
-                {stickerPanelOpen ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
+                {stickerPanelOpen ? (
+                  <ChevronLeft className="size-5" />
+                ) : (
+                  <ChevronRight className="size-5" />
+                )}
               </button>
             </div>
           </div>
@@ -597,7 +657,13 @@ export function SnakesGame({
                       boxShadow: active ? `0 0 12px ${p.color.from}` : "0 2px 4px rgba(0,0,0,.05)",
                     }}
                   >
-                    <PlayerAvatar player={p} />
+                    <button
+                      onClick={() => setSelectedPlayer(p)}
+                      className="press shrink-0"
+                      aria-label={`پرۆفایلی ${p.name}`}
+                    >
+                      <PlayerAvatar player={p} />
+                    </button>
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <p className="truncate text-[10px] font-bold text-[#2c2c2c]">{p.name}</p>
                       <span className="mt-0.5 inline-block w-max rounded bg-[#f4f1e6] px-1 py-0.5 text-[9px] font-bold text-[#8a6d1f]">
@@ -625,7 +691,7 @@ export function SnakesGame({
                 width: "min(100%, 100cqh)",
                 maxWidth: "100%",
                 maxHeight: "100%",
-                flexShrink: 1
+                flexShrink: 1,
               }}
             >
               {boardImageUrl && (
@@ -654,11 +720,11 @@ export function SnakesGame({
           {Object.entries(activeStickers).length > 0 && (
             <div className="absolute left-1/2 bottom-36 z-[100] -translate-x-1/2 pointer-events-none">
               {Object.entries(activeStickers).map(([id, url]) => (
-                <img 
-                  key={id} 
-                  src={url} 
-                  alt="sticker" 
-                  className="size-28 md:size-32 object-contain drop-shadow-2xl" 
+                <img
+                  key={id}
+                  src={url}
+                  alt="sticker"
+                  className="size-28 md:size-32 object-contain drop-shadow-2xl"
                 />
               ))}
             </div>
@@ -678,15 +744,23 @@ export function SnakesGame({
 
           {/* my bar */}
           <div className="relative z-30">
-            <div 
+            <div
               className="relative mb-1 ml-auto flex w-[calc(100%-1.5rem)] shrink-0 items-center gap-2 rounded-xl bg-white px-2.5 py-1.5 pl-12 transition-all"
               style={{
                 border: myTurnActive ? `2px solid ${meP.color.from}` : "2px solid transparent",
-                boxShadow: myTurnActive ? `0 0 12px ${meP.color.from}` : "0 3px 8px rgba(0,0,0,.08)",
+                boxShadow: myTurnActive
+                  ? `0 0 12px ${meP.color.from}`
+                  : "0 3px 8px rgba(0,0,0,.08)",
               }}
             >
               <div className="relative">
-                    <PlayerAvatar player={meP} pro={isProMember && !!user?.id && meP.id === "me"} />
+                <button
+                  onClick={() => setSelectedPlayer(meP)}
+                  className="press shrink-0"
+                  aria-label={`پرۆفایلی ${meP.name}`}
+                >
+                  <PlayerAvatar player={meP} pro={isProMember && !!user?.id && meP.id === "me"} />
+                </button>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold text-[#2c2c2c]">{meP.name}</p>
@@ -711,6 +785,23 @@ export function SnakesGame({
       )}
 
       {winner && <WinOverlay winner={winner} onClose={onClose} />}
+      {selectedPlayer && (
+        <PlayerProfileSheet
+          player={{
+            id: selectedPlayer.id,
+            name: selectedPlayer.name,
+            handle: "",
+            online: true,
+            avatar: selectedPlayer.avatar,
+            games: 0,
+            wins: 0,
+            gold: 0,
+          }}
+          followersCount={Math.max(0, players.length - 1)}
+          followingCount={Math.max(0, players.length - 1)}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -756,12 +847,20 @@ function Matchmaking({ players, onExit }: { players: GamePlayer[]; onExit: () =>
           <div
             key={p.id}
             className="flex flex-col items-center gap-2 transition-all duration-500"
-            style={{ opacity: i < found ? 1 : 0.25, transform: i < found ? "scale(1)" : "scale(.85)" }}
+            style={{
+              opacity: i < found ? 1 : 0.25,
+              transform: i < found ? "scale(1)" : "scale(.85)",
+            }}
           >
-            <div className="size-14 overflow-hidden rounded-full border-2 bg-white" style={{ borderColor: p.color.from }}>
+            <div
+              className="size-14 overflow-hidden rounded-full border-2 bg-white"
+              style={{ borderColor: p.color.from }}
+            >
               <img src={p.avatar} alt={p.name} className="size-full object-cover" />
             </div>
-            <span className="max-w-16 md:max-w-20 truncate text-[11px] md:text-xs font-semibold text-[#5c5140]">{p.name}</span>
+            <span className="max-w-16 md:max-w-20 truncate text-[11px] md:text-xs font-semibold text-[#5c5140]">
+              {p.name}
+            </span>
           </div>
         ))}
       </div>

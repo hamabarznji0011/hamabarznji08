@@ -1,10 +1,37 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { KeyRound, LogIn, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CircleCheck, CircleX, ChevronDown, KeyRound, LogIn, UserPlus, X } from "lucide-react";
 import snakesBg from "@/assets/snakes-bg.jpg";
 import snakeGreen from "@/assets/snake-green.png";
 import snakeBrown from "@/assets/snake-brown.png";
 import { useApp } from "@/lib/app-store";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] || "";
+const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+const birthYears = Array.from({ length: 61 }, (_, index) => String(2020 - index));
+const cities = [
+  "هەولێر",
+  "سلێمانی",
+  "دهۆک",
+  "هەڵەبجە",
+  "کەرکووک",
+  "زاخۆ",
+  "ڕانیە",
+  "کۆیە",
+  "تاوز",
+  "ئامێدی",
+  "عەقرە",
+  "چەمچەماڵ",
+  "پێنجوێن",
+  "دوکان",
+  "سەیدسادق",
+  "خانەقین",
+  "قەڵادزێ",
+  "شارەزوور",
+];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -42,32 +69,72 @@ function GoogleIcon({ className = "" }: { className?: string }) {
 }
 
 function AuthPage() {
-  const { savedAccount, login, register } = useApp();
+  const { savedAccount, login, register, isUsernameAvailable } = useApp();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"register" | "login">("register");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [birthYear, setBirthYear] = useState("");
+  const [city, setCity] = useState("");
+  const [isBirthYearModalOpen, setIsBirthYearModalOpen] = useState(false);
+  const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<"available" | "taken" | null>(null);
+  const [loginInvalid, setLoginInvalid] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "register" || !name.trim()) {
+      setUsernameStatus(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setUsernameStatus(isUsernameAvailable(name) ? "available" : "taken");
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [isUsernameAvailable, mode, name]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !password.trim()) return;
     if (mode === "register") {
-      register(name.trim());
+      if (
+        usernameStatus !== "available" ||
+        password.length < 8 ||
+        password.length > 20 ||
+        !birthYear ||
+        !city
+      )
+        return;
+      if (!register(name.trim(), password, birthYear, city)) {
+        setUsernameStatus("taken");
+        return;
+      }
       navigate({ to: "/app/profile" });
     } else {
-      login(name.trim());
+      if (!login(name.trim(), password)) {
+        setLoginInvalid(true);
+        return;
+      }
+      setLoginInvalid(false);
       navigate({ to: "/app/play" });
     }
   };
 
-  const googleAuth = () => {
-    if (savedAccount) {
-      login(savedAccount.name);
-      navigate({ to: "/app/play" });
+  const googleAuth = async () => {
+    if (supabase) {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
       return;
     }
-    register("بەکارهێنەری Google");
-    navigate({ to: "/app/profile" });
+    if (mode === "login" && savedAccount) {
+      if (login(savedAccount.name, savedAccount.password ?? "")) navigate({ to: "/app/play" });
+      return;
+    }
+    if (mode === "register") {
+      register("بەکارهێنەری Google", crypto.randomUUID());
+      navigate({ to: "/app/profile" });
+    }
   };
 
   return (
@@ -131,12 +198,34 @@ function AuthPage() {
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
                 ناوی بەکارهێنەر
               </span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="ناوەکەت بنووسە"
-                className="w-full rounded-2xl border border-border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
-              />
+              <div className="relative">
+                <input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setLoginInvalid(false);
+                  }}
+                  placeholder="ناوەکەت بنووسە"
+                  className={`w-full rounded-2xl border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary ${mode === "login" && loginInvalid ? "border-red-500 ring-2 ring-red-500" : usernameStatus === "taken" ? "border-red-500 ring-2 ring-red-500" : usernameStatus === "available" ? "border-emerald-500 ring-2 ring-emerald-500" : "border-border"}`}
+                />
+                {mode === "register" &&
+                  usernameStatus &&
+                  (usernameStatus === "available" ? (
+                    <CircleCheck className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-emerald-500" />
+                  ) : (
+                    <CircleX className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-red-500" />
+                  ))}
+              </div>
+              {mode === "register" && usernameStatus === "taken" && (
+                <span className="mt-1 block text-xs font-semibold text-red-500">
+                  ئەم ناوە هەیە بیگۆڕە
+                </span>
+              )}
+              {mode === "login" && loginInvalid && (
+                <span className="mt-1 block text-xs font-semibold text-red-500">
+                  ناو یان وشەی نهێنی هەڵەیە
+                </span>
+              )}
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
@@ -145,11 +234,63 @@ function AuthPage() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                maxLength={20}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setLoginInvalid(false);
+                }}
                 placeholder="••••••"
-                className="w-full rounded-2xl border border-border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                className={`w-full rounded-2xl border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary ${mode === "login" && loginInvalid ? "border-red-500 ring-2 ring-red-500" : mode === "register" && (password.length < 8 || password.length > 20) && password.length > 0 ? "border-red-500 ring-2 ring-red-500" : "border-border"}`}
               />
+              {mode === "register" && password.length > 0 && password.length < 8 && (
+                <span className="mt-1 block text-xs font-semibold text-red-500">
+                  تکایە بیکە 8 پیت
+                </span>
+              )}
+              {mode === "register" && password.length > 20 && (
+                <span className="mt-1 block text-xs font-semibold text-red-500">
+                  تکایە لە 20 پیت زیاتر نەبێت
+                </span>
+              )}
             </label>
+
+            {mode === "register" && (
+              <div dir="rtl" className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                    تەمەن
+                  </span>
+                  <SelectionPicker
+                    value={birthYear}
+                    placeholder="ساڵی لەدایکبوونت"
+                    options={birthYears}
+                    isOpen={isBirthYearModalOpen}
+                    onOpenChange={setIsBirthYearModalOpen}
+                    onSelect={(year) => {
+                      setBirthYear(year);
+                      setIsBirthYearModalOpen(false);
+                    }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                    شار
+                  </span>
+                  <SelectionPicker
+                    value={city}
+                    placeholder="شاری خۆت هەڵبژێرە"
+                    options={cities}
+                    isOpen={isCityModalOpen}
+                    onOpenChange={setIsCityModalOpen}
+                    onSelect={(selectedCity) => {
+                      setCity(selectedCity);
+                      setIsCityModalOpen(false);
+                    }}
+                  />
+
+                </label>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -172,13 +313,84 @@ function AuthPage() {
             className="press flex w-full items-center justify-center gap-3 rounded-2xl bg-panel py-3.5 text-sm font-bold text-panel-foreground shadow-[var(--shadow-glass)]"
           >
             <GoogleIcon className="size-5" />
-            بەردەوامبوون بە Google
+            {mode === "register" ? "لەسەر گووگڵ دروستی بکە" : "هەژماری کۆن"}
           </button>
         </div>
 
         {savedAccount && <SavedAccountButton />}
       </div>
     </main>
+  );
+}
+
+function SelectionPicker({
+  value,
+  placeholder,
+  options,
+  isOpen,
+  onOpenChange,
+  onSelect,
+}: {
+  value: string;
+  placeholder: string;
+  options: string[];
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onOpenChange(true)}
+        className="flex h-[46px] w-full items-center justify-between rounded-2xl border border-border bg-input px-3 text-sm text-foreground outline-none transition-colors hover:border-primary focus:border-primary"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+      >
+        <ChevronDown className="size-4 text-muted-foreground" />
+        <span className={value ? "font-semibold" : "text-muted-foreground"}>
+          {value || placeholder}
+        </span>
+      </button>
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 px-4 pb-5 sm:items-center"
+          onClick={() => onOpenChange(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="animate-soft-in w-full max-w-sm rounded-3xl border border-border bg-panel p-4 text-panel-foreground shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                aria-label="داخستن"
+                className="press flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+              >
+                <X className="size-4" />
+              </button>
+              <h2 className="font-bold">{placeholder}</h2>
+              <span className="size-9" />
+            </div>
+            <div className="grid max-h-[min(55vh,24rem)] grid-cols-2 gap-2 overflow-y-auto pr-1">
+              {options.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => onSelect(option)}
+                  className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition-all hover:border-primary hover:bg-primary/10 active:scale-[.98] ${value === option ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-glow)]" : "border-border bg-input"}`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -19,6 +19,10 @@ export type Message = {
 export type Friend = {
   id: string;
   name: string;
+  handle?: string;
+  birth_year?: string;
+  city?: string;
+  online?: boolean;
   avatar: string;
   points: number;
   gold: number;
@@ -37,6 +41,10 @@ export type Group = {
 export type Player = {
   id: string;
   name: string;
+  handle?: string;
+  birth_year?: string;
+  city?: string;
+  online?: boolean;
   avatar: string;
   points: number;
   gold: number;
@@ -47,13 +55,28 @@ export type Player = {
 export type User = {
   id: string;
   name: string;
+  handle?: string;
+  birth_year?: string;
+  city?: string;
+  online?: boolean;
   avatar: string;
   points: number;
   games: number;
   wins: number;
 };
 
-type SavedAccount = { id: string; name: string };
+type SavedAccount = {
+  id: string;
+  name: string;
+  handle?: string;
+  birth_year?: string;
+  city?: string;
+  password?: string;
+  lastPasswordChangedAt?: number;
+  email?: string;
+  hideProfileDetails?: boolean;
+  hideFollowing?: boolean;
+};
 
 type State = {
   user: User | null;
@@ -83,10 +106,14 @@ export const NAME_COOLDOWN_DAYS = 30;
 export const userStorageKey = (userId: string, category: string) => `user_${userId}_${category}`;
 const ACTIVE_SESSION_KEY = "snakes_ladders_active_session";
 
-const accountIdFor = (name: string) => `account_${encodeURIComponent(name.trim().toLocaleLowerCase())}`;
+const accountIdFor = (name: string) =>
+  `account_${encodeURIComponent(name.trim().toLocaleLowerCase())}`;
 
 const avatarFor = (seed: string) =>
   `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(seed)}`;
+
+export const formatHandle = (handle: string | undefined) =>
+  handle?.trim() ? `@${handle.trim().replace(/^@+/, "")}` : "";
 
 const makeFriend = (
   id: string,
@@ -95,7 +122,7 @@ const makeFriend = (
   gold: number,
   games: number,
   wins: number,
-): Friend => ({ id, name, avatar: avatarFor(id), points, gold, games, wins });
+): Friend => ({ id, name, avatar: avatarFor(id), online: true, points, gold, games, wins });
 
 const now = Date.now();
 const min = 60_000;
@@ -174,11 +201,15 @@ const seedState = (): State => ({
 });
 
 type Ctx = State & {
-  register: (name: string) => void;
-  login: (name: string) => void;
+  register: (name: string, password: string, birth_year?: string, city?: string) => boolean;
+  login: (name: string, password: string) => boolean;
   loginSaved: () => void;
   logout: () => void;
   setOnline: (v: boolean) => void;
+  setHideFollowing: (hidden: boolean) => void;
+  hideFollowing: boolean;
+  setHideProfileDetails: (hidden: boolean) => void;
+  hideProfileDetails: boolean;
   addGold: (amount: number) => void;
   spendGold: (amount: number) => boolean;
   unlockStickerSlot: (slotIndex: number) => boolean;
@@ -205,8 +236,19 @@ type Ctx = State & {
   requestFriend: (player: Player) => "added" | "exists";
   isNameTaken: (name: string) => boolean;
   nameCooldownDaysLeft: number;
-  updateProfile: (data: { name?: string | undefined; avatar?: string | undefined }) => void;
+  updateProfile: (data: {
+    name?: string | undefined;
+    avatar?: string | undefined;
+    handle?: string | undefined;
+  }) => void;
   deleteAccount: () => void;
+  isUsernameAvailable: (name: string) => boolean;
+  isHandleAvailable: (handle: string) => boolean;
+  updatePassword: (password: string) => boolean;
+  linkEmail: (email: string) => void;
+  passwordChangedAt: number | null;
+  currentPassword: string;
+  linkedEmail: string | null;
 };
 
 const AppContext = createContext<Ctx | null>(null);
@@ -223,10 +265,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return {
         ...seedState(),
         ...stored,
-        isProMember: localStorage.getItem(userStorageKey(userId, "isPro")) === "true" || stored.isProMember === true,
-        equippedProFrame: localStorage.getItem(userStorageKey(userId, "equippedProFrame")) ?? stored.equippedProFrame ?? null,
-        equippedProBanner: localStorage.getItem(userStorageKey(userId, "equippedProBanner")) ?? stored.equippedProBanner ?? null,
-        dailyGoldClaimedDate: localStorage.getItem(userStorageKey(userId, "dailyGoldClaimedDate")) ?? stored.dailyGoldClaimedDate ?? null,
+        isProMember:
+          localStorage.getItem(userStorageKey(userId, "isPro")) === "true" ||
+          stored.isProMember === true,
+        equippedProFrame:
+          localStorage.getItem(userStorageKey(userId, "equippedProFrame")) ??
+          stored.equippedProFrame ??
+          null,
+        equippedProBanner:
+          localStorage.getItem(userStorageKey(userId, "equippedProBanner")) ??
+          stored.equippedProBanner ??
+          null,
+        dailyGoldClaimedDate:
+          localStorage.getItem(userStorageKey(userId, "dailyGoldClaimedDate")) ??
+          stored.dailyGoldClaimedDate ??
+          null,
       };
     } catch {
       return seedState();
@@ -265,18 +318,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Ctx>(() => {
     const friends = Array.isArray(state.friends) ? state.friends : [];
     const blockedIds = Array.isArray(state.blockedIds) ? state.blockedIds : [];
-    const directMessages = state.directMessages && typeof state.directMessages === "object" ? state.directMessages : {};
+    const directMessages =
+      state.directMessages && typeof state.directMessages === "object" ? state.directMessages : {};
     const readAt = state.readAt && typeof state.readAt === "object" ? state.readAt : {};
     const groups = Array.isArray(state.groups) ? state.groups : [];
-    const visibleFriends = friends.filter((f) => f?.id && !blockedIds.includes(f.id));
+    const passwordChangedAt = state.savedAccount?.lastPasswordChangedAt ?? null;
+    const currentPassword = state.savedAccount?.password ?? "";
+    const linkedEmail = state.savedAccount?.email ?? null;
+    const visibleFriends = friends
+      .filter((f) => f?.id && !blockedIds.includes(f.id))
+      .sort((first, second) => {
+        const latestFor = (friendId: string) =>
+          Math.max(...(directMessages[friendId] ?? []).map((message) => message.at), 0);
+        return latestFor(second.id) - latestFor(first.id);
+      });
     const blockedFriends = friends.filter((f) => f?.id && blockedIds.includes(f.id));
 
     const unreadFor = (friendId: string) => {
       if (blockedIds.includes(friendId)) return 0;
       const last = readAt[friendId] ?? 0;
-      return (directMessages[friendId] ?? []).filter(
-        (m) => m.senderId !== "me" && m.at > last,
-      ).length;
+      return (directMessages[friendId] ?? []).filter((m) => m.senderId !== "me" && m.at > last)
+        .length;
     };
 
     const totalUnread = visibleFriends.reduce((sum, f) => sum + unreadFor(f.id), 0);
@@ -290,6 +352,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       friendRequests: Array.isArray(state.friendRequests) ? state.friendRequests : [],
       visibleFriends,
       blockedFriends,
+      hideFollowing: state.savedAccount?.hideFollowing ?? false,
+        hideProfileDetails: state.savedAccount?.hideProfileDetails ?? false,
+      passwordChangedAt,
+      currentPassword,
+      linkedEmail,
       unreadFor,
       totalUnread,
       playerById: (id) => globalPlayers.find((p) => p.id === id),
@@ -299,7 +366,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return {
             ...p,
             friendRequests: (p.friendRequests ?? []).filter((r) => r.id !== id),
-            friends: req && !(p.friends ?? []).some((f) => f?.id === id) ? [...(p.friends ?? []), req] : (p.friends ?? []),
+            friends:
+              req && !(p.friends ?? []).some((f) => f?.id === id)
+                ? [...(p.friends ?? []), req]
+                : (p.friends ?? []),
           };
         }),
       declineRequest: (id) =>
@@ -315,10 +385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return "exists";
         patch((p) => ({
           ...p,
-          friendRequests: [
-            { ...player } as Friend,
-            ...(p.friendRequests ?? []),
-          ],
+          friendRequests: [{ ...player } as Friend, ...(p.friendRequests ?? [])],
         }));
         return "added";
       },
@@ -337,7 +404,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const total = NAME_COOLDOWN_DAYS * 86_400_000;
         return elapsed >= total ? 0 : Math.ceil((total - elapsed) / 86_400_000);
       })(),
-      updateProfile: ({ name, avatar }) =>
+      isHandleAvailable: (handle) => {
+        const normalized = handle.trim().toLowerCase();
+        if (!normalized) return false;
+        const currentHandle = state.user?.handle ?? state.savedAccount?.handle ?? "";
+        if (normalized === currentHandle.trim().toLowerCase()) return true;
+        const knownHandle = [...globalPlayers, ...friends].some(
+          (player) =>
+            ((player as Player & { handle?: string }).handle ?? "").trim().toLowerCase() ===
+            normalized,
+        );
+        if (knownHandle) return false;
+        if (typeof window === "undefined") return true;
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+          const key = window.localStorage.key(index);
+          if (!key?.startsWith("user_") || !key.endsWith("_app_state")) continue;
+          try {
+            const stored = JSON.parse(window.localStorage.getItem(key) ?? "") as Partial<State>;
+            const storedHandle = stored.user?.handle ?? stored.savedAccount?.handle ?? "";
+            if (
+              storedHandle.trim().toLowerCase() === normalized &&
+              stored.user?.id !== state.user?.id
+            ) {
+              return false;
+            }
+          } catch {
+            // Ignore unrelated local storage entries.
+          }
+        }
+        return true;
+      },
+      updateProfile: ({ name, avatar, handle }) =>
         patch((p) => {
           if (!p.user) return p;
           const nameChanged = !!name && name !== p.user.name;
@@ -346,10 +443,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             user: {
               ...p.user,
               name: name ?? p.user.name,
+              handle: handle ?? p.user.handle ?? "",
               avatar: avatar ?? p.user.avatar,
             },
-            savedAccount: nameChanged && p.user
-              ? { id: p.user.id, name: name! }
+            savedAccount: p.savedAccount
+              ? {
+                  ...p.savedAccount,
+                  name: name ?? p.savedAccount.name,
+                  handle: handle ?? p.savedAccount.handle ?? "",
+                }
               : p.savedAccount,
             nameChangedAt: nameChanged ? Date.now() : p.nameChangedAt,
           };
@@ -373,37 +475,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setState(seedState());
       },
 
-      register: (name) =>
+      register: (name, password, birth_year, city) => {
+        const id = accountIdFor(name);
+        if (!name.trim() || !password || localStorage.getItem(userStorageKey(id, "app_state"))) {
+          return false;
+        }
         setState(() => {
-          const id = accountIdFor(name);
-          try {
-            localStorage.removeItem(userStorageKey(id, "app_state"));
-            localStorage.removeItem(userStorageKey(id, "stickers"));
-            localStorage.removeItem(userStorageKey(id, "active_sound"));
-            localStorage.removeItem(userStorageKey(id, "isPro"));
-            localStorage.removeItem(userStorageKey(id, "dailyGoldClaimedDate"));
-            localStorage.removeItem(userStorageKey(id, "equippedProFrame"));
-            localStorage.removeItem(userStorageKey(id, "equippedProBanner"));
-          } catch {
-            /* ignore */
-          }
           localStorage.setItem(ACTIVE_SESSION_KEY, id);
           return {
             ...seedState(),
-            user: { id, name, avatar: avatarFor(name || "me"), points: 0, gold: 75, games: 0, wins: 0 },
-            savedAccount: { id, name },
+            user: {
+              id,
+              name,
+              handle: "",
+              birth_year,
+              city,
+              avatar: avatarFor(name || "me"),
+              points: 0,
+              gold: 75,
+              games: 0,
+              wins: 0,
+            },
+            savedAccount: { id, name, handle: "", birth_year, city, password },
           };
-        }),
-      login: (name) => {
+        });
+        return true;
+      },
+      login: (name, password) => {
         const id = accountIdFor(name);
         let stored: Partial<State> = {};
         try {
           const raw = localStorage.getItem(userStorageKey(id, "app_state"));
           if (raw) stored = JSON.parse(raw) as Partial<State>;
         } catch {
-          /* ignore */
+          return false;
         }
-        const isProMember = localStorage.getItem(userStorageKey(id, "isPro")) === "true" || stored.isProMember === true;
+        if (!stored.user || stored.savedAccount?.password !== password) return false;
+        const isProMember =
+          localStorage.getItem(userStorageKey(id, "isPro")) === "true" ||
+          stored.isProMember === true;
         setState(() => ({
           ...seedState(),
           ...stored,
@@ -411,14 +521,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
           user: {
             id,
             name,
+            handle: stored.user?.handle ?? stored.savedAccount?.handle ?? "",
+            birth_year: stored.user?.birth_year ?? stored.savedAccount?.birth_year,
+            city: stored.user?.city ?? stored.savedAccount?.city,
             avatar: avatarFor(name || "me"),
             points: stored.user?.points ?? 1840,
             games: stored.user?.games ?? 62,
             wins: stored.user?.wins ?? 35,
           },
-          savedAccount: { id, name },
+          savedAccount: {
+            id,
+            name,
+            handle: stored.user?.handle ?? stored.savedAccount?.handle ?? "",
+            birth_year: stored.savedAccount?.birth_year ?? stored.user?.birth_year,
+            city: stored.savedAccount?.city ?? stored.user?.city,
+            password,
+          },
         }));
         localStorage.setItem(ACTIVE_SESSION_KEY, id);
+        return true;
       },
       loginSaved: () =>
         setState((p) => {
@@ -435,18 +556,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return {
             ...seedState(),
             ...stored,
-            isProMember: localStorage.getItem(userStorageKey(id, "isPro")) === "true" || stored.isProMember === true,
-            equippedProFrame: localStorage.getItem(userStorageKey(id, "equippedProFrame")) ?? stored.equippedProFrame ?? null,
-            equippedProBanner: localStorage.getItem(userStorageKey(id, "equippedProBanner")) ?? stored.equippedProBanner ?? null,
+            isProMember:
+              localStorage.getItem(userStorageKey(id, "isPro")) === "true" ||
+              stored.isProMember === true,
+            equippedProFrame:
+              localStorage.getItem(userStorageKey(id, "equippedProFrame")) ??
+              stored.equippedProFrame ??
+              null,
+            equippedProBanner:
+              localStorage.getItem(userStorageKey(id, "equippedProBanner")) ??
+              stored.equippedProBanner ??
+              null,
             user: {
               id,
               name,
+              handle: stored.user?.handle ?? stored.savedAccount?.handle ?? "",
+              birth_year: stored.user?.birth_year ?? stored.savedAccount?.birth_year,
+              city: stored.user?.city ?? stored.savedAccount?.city,
               avatar: avatarFor(name),
               points: 1840,
               games: 62,
               wins: 35,
             },
-            savedAccount: { id, name },
+            savedAccount: {
+              id,
+              name,
+              handle: stored.user?.handle ?? stored.savedAccount?.handle ?? "",
+              birth_year: stored.savedAccount?.birth_year ?? stored.user?.birth_year,
+              city: stored.savedAccount?.city ?? stored.user?.city,
+              password: stored.savedAccount?.password,
+            },
           };
         }),
       logout: () => {
@@ -454,6 +593,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setState(seedState());
       },
       setOnline: (v) => patch((p) => ({ ...p, online: v })),
+      setHideFollowing: (hidden) =>
+        patch((p) => ({
+          ...p,
+          savedAccount: p.savedAccount
+            ? { ...p.savedAccount, hideFollowing: hidden }
+            : p.savedAccount,
+        })),
+      setHideProfileDetails: (hidden) =>
+        patch((p) => ({
+          ...p,
+          savedAccount: p.savedAccount
+            ? { ...p.savedAccount, hideProfileDetails: hidden }
+            : p.savedAccount,
+        })),
+      isUsernameAvailable: (name) => {
+        const normalized = name.trim();
+        return (
+          Boolean(normalized) &&
+          !localStorage.getItem(userStorageKey(accountIdFor(normalized), "app_state"))
+        );
+      },
+      updatePassword: (password) => {
+        if (!state.savedAccount || password.length < 8) return false;
+        const changedAt = state.savedAccount.lastPasswordChangedAt ?? 0;
+        if (changedAt && Date.now() - changedAt < 10 * 86_400_000) return false;
+        patch((p) => ({
+          ...p,
+          savedAccount: {
+            ...p.savedAccount!,
+            password,
+            lastPasswordChangedAt: Date.now(),
+          },
+        }));
+        return true;
+      },
+      linkEmail: (email) =>
+        patch((p) => ({
+          ...p,
+          savedAccount: p.savedAccount ? { ...p.savedAccount, email } : p.savedAccount,
+        })),
       addGold: (amount) => patch((p) => ({ ...p, gold: p.gold + amount })),
       spendGold: (amount) => {
         if (!Number.isFinite(amount) || amount < 0 || state.gold < amount) return false;
@@ -476,15 +655,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         patch((p) => ({
           ...p,
           gold: p.gold - price,
-          unlockedStickerSlots: [...(p.unlockedStickerSlots ?? []), slotIndex].sort((a, b) => a - b),
+          unlockedStickerSlots: [...(p.unlockedStickerSlots ?? []), slotIndex].sort(
+            (a, b) => a - b,
+          ),
         }));
         return true;
       },
       sendDirect: (friendId, text, imageUrl) =>
         patch((p) => {
-          const directMessages = p.directMessages && typeof p.directMessages === "object"
-            ? p.directMessages
-            : {};
+          const directMessages =
+            p.directMessages && typeof p.directMessages === "object" ? p.directMessages : {};
           const existingMessages = Array.isArray(directMessages[friendId])
             ? directMessages[friendId]
             : [];
@@ -514,17 +694,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ],
           },
         })),
-      markRead: (chatId) =>
-        patch((p) => ({ ...p, readAt: { ...p.readAt, [chatId]: Date.now() } })),
+      markRead: (chatId) => patch((p) => ({ ...p, readAt: { ...p.readAt, [chatId]: Date.now() } })),
       blockFriend: (friendId) =>
-        patch((p) => ({
-          ...p,
-          blockedIds: p.blockedIds.includes(friendId)
-            ? p.blockedIds
-            : [...p.blockedIds, friendId],
-        })),
+        patch((p) => {
+          const directMessages = { ...p.directMessages };
+          delete directMessages[friendId];
+          const readAt = { ...p.readAt };
+          delete readAt[friendId];
+          return {
+            ...p,
+            blockedIds: p.blockedIds.includes(friendId)
+              ? p.blockedIds
+              : [...p.blockedIds, friendId],
+            directMessages,
+            readAt,
+          };
+        }),
       unblockFriend: (friendId) =>
-        patch((p) => ({ ...p, blockedIds: p.blockedIds.filter((id) => id !== friendId) })),
+        patch((p) => {
+          const directMessages = { ...p.directMessages };
+          delete directMessages[friendId];
+          const readAt = { ...p.readAt };
+          delete readAt[friendId];
+          return {
+            ...p,
+            blockedIds: p.blockedIds.filter((id) => id !== friendId),
+            friends: p.friends.filter((friend) => friend.id !== friendId),
+            directMessages,
+            readAt,
+          };
+        }),
       createGroup: (name, memberIds) =>
         patch((p) => ({
           ...p,

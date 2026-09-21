@@ -171,6 +171,15 @@
   }
 }
 
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes sticker-slot-shrink {
   from {
     opacity: 0.5;
@@ -202,7 +211,7 @@
 }
 
 .sticker-slot-unlocking {
-  animation: sticker-slot-unlocking 1s cubic-bezier(.22, 1, .36, 1);
+  animation: sticker-slot-unlocking 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes shimmer {
@@ -228,6 +237,10 @@
 
 @utility animate-soft-in {
   animation: soft-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-slide-in-right {
+  animation: slide-in-right 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @utility no-scrollbar {

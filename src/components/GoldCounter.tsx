@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/app-store";
 import { GoldBar } from "@/components/GoldBar";
+import { useChrome } from "@/components/chrome";
 import { useLocation } from "@tanstack/react-router";
 
 export function GoldCounter() {
   const app = useApp();
+  const { hidden } = useChrome();
   const gold = app.gold || 0;
-  
+
   const [displayGold, setDisplayGold] = useState(gold);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false); // ستەیتی نوێ بۆ کاتی یاریکردن
@@ -21,18 +23,18 @@ export function GoldCounter() {
       const amount = e.detail;
       const currentGold = app.gold || 0;
       const newGold = Math.max(0, currentGold - amount);
-      
-      if (typeof (app as any).setGold === 'function') {
+
+      if (typeof (app as any).setGold === "function") {
         (app as any).setGold(newGold);
-      } else if (typeof (app as any).updateGold === 'function') {
+      } else if (typeof (app as any).updateGold === "function") {
         (app as any).updateGold(newGold);
-      } else if (typeof (useApp as any).setState === 'function') {
+      } else if (typeof (useApp as any).setState === "function") {
         (useApp as any).setState({ gold: newGold });
       } else {
-         setDisplayGold(newGold);
+        setDisplayGold(newGold);
       }
     };
-    
+
     // ئاماژەکان بۆ شاردنەوە و پیشاندانەوەی زێڕەکە
     const handleHide = () => setIsPlaying(true);
     const handleShow = () => setIsPlaying(false);
@@ -40,7 +42,7 @@ export function GoldCounter() {
     window.addEventListener("deduct-gold", handleDeduct);
     window.addEventListener("hide-gold-counter", handleHide);
     window.addEventListener("show-gold-counter", handleShow);
-    
+
     return () => {
       window.removeEventListener("deduct-gold", handleDeduct);
       window.removeEventListener("hide-gold-counter", handleHide);
@@ -50,26 +52,26 @@ export function GoldCounter() {
 
   useEffect(() => {
     if (displayGold === gold) return;
-    
+
     let animationFrameId: number;
     let startTimestamp: number | null = null;
     const startGold = displayGold;
     const endGold = gold;
-    
-    // کاتی ئەنیمەیشنەکە ٤٠٠ ملی‌چرکە (٠.٤ چرکە) 
-    const duration = 400; 
+
+    // کاتی ئەنیمەیشنەکە ٤٠٠ ملی‌چرکە (٠.٤ چرکە)
+    const duration = 400;
 
     setIsAnimating(true);
 
     const step = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp;
       const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      
+
       const easeOut = 1 - Math.pow(1 - progress, 4);
       const current = Math.floor(startGold + (endGold - startGold) * easeOut);
-      
+
       setDisplayGold(current);
-      
+
       if (progress < 1) {
         animationFrameId = window.requestAnimationFrame(step);
       } else {
@@ -84,7 +86,7 @@ export function GoldCounter() {
   }, [gold]);
 
   // مەرجی شاردنەوە: ئەگەر لە بەشی هاوڕێکان بێت، یان یاری دەستی پێکردبێت، ئەوا زێڕەکە ون دەبێت
-  if (isFriendsSection || isPlaying) {
+  if (hidden || isFriendsSection || isPlaying) {
     return null;
   }
 
@@ -94,11 +96,13 @@ export function GoldCounter() {
         <span className="flex size-7 items-center justify-center rounded-full bg-black/30">
           <GoldBar className="w-5" />
         </span>
-        <span className={`min-w-6 text-sm font-bold tabular-nums inline-block origin-left transition-all duration-150 ${
-          isAnimating 
-            ? "text-yellow-400 scale-[1.6] drop-shadow-[0_0_8px_rgba(250,204,21,1)]" 
-            : "text-gold scale-100"
-        }`}>
+        <span
+          className={`min-w-6 text-sm font-bold tabular-nums inline-block origin-left transition-all duration-150 ${
+            isAnimating
+              ? "text-yellow-400 scale-[1.6] drop-shadow-[0_0_8px_rgba(250,204,21,1)]"
+              : "text-gold scale-100"
+          }`}
+        >
           {displayGold}
         </span>
       </div>
