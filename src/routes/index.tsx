@@ -1,15 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CircleCheck, CircleX, ChevronDown, KeyRound, LogIn, UserPlus, X } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  ChevronDown,
+  KeyRound,
+  Loader2,
+  LogIn,
+  UserPlus,
+  X,
+} from "lucide-react";
 import snakesBg from "@/assets/snakes-bg.jpg";
 import snakeGreen from "@/assets/snake-green.png";
 import snakeBrown from "@/assets/snake-brown.png";
-import { useApp } from "@/lib/app-store";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] || "";
-const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+import { useApp, type ProfileRecord } from "@/lib/app-store";
+import { supabase } from "@/lib/supabase";
 
 const birthYears = Array.from({ length: 61 }, (_, index) => String(2020 - index));
 const cities = [
@@ -32,6 +37,9 @@ const cities = [
   "قەڵادزێ",
   "شارەزوور",
 ];
+
+const emailForUsername = (username: string) =>
+  `${encodeURIComponent(username.trim().toLowerCase()).replace(/%/g, "")}@app.com`;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -69,7 +77,7 @@ function GoogleIcon({ className = "" }: { className?: string }) {
 }
 
 function AuthPage() {
-  const { savedAccount, login, register, isUsernameAvailable } = useApp();
+  const { savedAccount, login, loginWithProfile, register } = useApp();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"register" | "login">("register");
   const [name, setName] = useState("");
@@ -78,44 +86,178 @@ function AuthPage() {
   const [city, setCity] = useState("");
   const [isBirthYearModalOpen, setIsBirthYearModalOpen] = useState(false);
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
-  const [usernameStatus, setUsernameStatus] = useState<"available" | "taken" | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<"available" | "taken" | "checking" | null>(
+    null,
+  );
+  const usernameTooLong = name.length > 20;
   const [loginInvalid, setLoginInvalid] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const checkUsername = async (username: string): Promise<boolean | null> => {
+    if (!supabase) return true;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("username", username.trim())
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data === null;
+  };
 
   useEffect(() => {
-    if (mode !== "register" || !name.trim()) {
+    if (mode !== "register" || !name.trim() || usernameTooLong) {
       setUsernameStatus(null);
       return;
     }
-    const timer = window.setTimeout(() => {
-      setUsernameStatus(isUsernameAvailable(name) ? "available" : "taken");
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setUsernameStatus("checking");
+      const available = await checkUsername(name);
+      if (!cancelled && available !== null) {
+        setUsernameStatus(available ? "available" : "taken");
+      }
     }, 350);
-    return () => window.clearTimeout(timer);
-  }, [isUsernameAvailable, mode, name]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [mode, name, usernameTooLong]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!name.trim() || !password.trim()) return;
-    if (mode === "register") {
-      if (
-        usernameStatus !== "available" ||
-        password.length < 8 ||
-        password.length > 20 ||
-        !birthYear ||
-        !city
-      )
-        return;
-      if (!register(name.trim(), password, birthYear, city)) {
-        setUsernameStatus("taken");
-        return;
+    setIsSubmitting(true);
+    try {
+      if (mode === "register") {
+        if (usernameTooLong || password.length < 8 || password.length > 20 || !birthYear || !city)
+          return;
+        const username = name.trim();
+        const available = await checkUsername(username);
+        if (available !== true) {
+          if (available === false) {
+            setUsernameStatus("taken");
+            alert("ئەم هەژمارە پێشتر تۆمارکراوە، تکایە بچۆ بەشی چوونەژوورەوە");
+          }
+          return;
+        }
+
+        let profileId: string | undefined;
+        if (supabase) {
+          const email = emailForUsername(username);
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+          });
+          let authUser = authData.user;
+          if (authError) {
+            if (!authError.message.toLowerCase().includes("already registered")) {
+              throw authError;
+            }
+
+            const { data: existingProfile, error: profileLookupError } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("username", username)
+              .maybeSingle();
+            if (profileLookupError) throw profileLookupError;
+            if (existingProfile) {
+              setUsernameStatus("taken");
+              alert("ئەم هەژمارە پێشتر تۆمارکراوە، تکایە بچۆ بەشی چوونەژوورەوە");
+              return;
+            }
+
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword(
+              { email, password },
+            );
+            if (signInError) {
+              setUsernameStatus("taken");
+              alert("ئەم هەژمارە پێشتر تۆمارکراوە، تکایە بچۆ بەشی چوونەژوورەوە");
+              return;
+            }
+            authUser = signInData.user;
+          }
+          if (!authUser?.id) {
+            throw new Error("Supabase Auth user was not returned");
+          }
+          profileId = authUser.id;
+          const age = new Date().getFullYear() - Number(birthYear);
+          const { error: profileError } = await supabase.from("profiles").upsert(
+            [
+              {
+                id: authUser.id,
+                username,
+                avatar_url: "",
+                city,
+                age: Number.isFinite(age) && age >= 0 ? age : null,
+                birth_year: birthYear,
+                gold: 75,
+                wins: 0,
+                losses: 0,
+              },
+            ],
+            { onConflict: "id" },
+          );
+          if (profileError) throw profileError;
+        }
+        if (!register(username, password, birthYear, city, profileId)) {
+          throw new Error("هەژمارەکە نەتوانرا دروست بکرێت");
+        }
+        setName("");
+        setPassword("");
+        setBirthYear("");
+        setCity("");
+        setUsernameStatus(null);
+        navigate({ to: "/app/profile" });
+      } else {
+        if (supabase) {
+          const username = name.trim();
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("username", username)
+            .maybeSingle();
+          if (profileError) throw profileError;
+          if (!profile) {
+            setLoginInvalid(true);
+            return;
+          }
+          const email = emailForUsername(username);
+          const { error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password: password.trim(),
+          });
+          if (authError) {
+            setLoginInvalid(true);
+            return;
+          }
+          loginWithProfile(profile as ProfileRecord, password.trim());
+        } else if (!login(name.trim(), password.trim())) {
+          setLoginInvalid(true);
+          return;
+        }
+        setLoginInvalid(false);
+        navigate({ to: "/app/play" });
       }
-      navigate({ to: "/app/profile" });
-    } else {
-      if (!login(name.trim(), password)) {
-        setLoginInvalid(true);
-        return;
-      }
-      setLoginInvalid(false);
-      navigate({ to: "/app/play" });
+    } catch (error) {
+      console.error("Signup error detail:", error);
+      const errorRecord =
+        error && typeof error === "object"
+          ? (error as { message?: unknown; error_description?: unknown })
+          : null;
+      const errorMessage =
+        (typeof errorRecord?.message === "string" && errorRecord.message) ||
+        (typeof errorRecord?.error_description === "string" && errorRecord.error_description) ||
+        "کێشەی پەیوەندی لەگەڵ سێرڤەر هەبوو";
+      alert("کێشەیەک لە تۆمارکردن هەبوو: " + errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -201,12 +343,13 @@ function AuthPage() {
               <div className="relative">
                 <input
                   value={name}
+                  maxLength={20}
                   onChange={(e) => {
                     setName(e.target.value);
                     setLoginInvalid(false);
                   }}
                   placeholder="ناوەکەت بنووسە"
-                  className={`w-full rounded-2xl border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary ${mode === "login" && loginInvalid ? "border-red-500 ring-2 ring-red-500" : usernameStatus === "taken" ? "border-red-500 ring-2 ring-red-500" : usernameStatus === "available" ? "border-emerald-500 ring-2 ring-emerald-500" : "border-border"}`}
+                  className={`w-full rounded-2xl border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary ${mode === "login" && loginInvalid ? "border-red-500 ring-2 ring-red-500" : usernameTooLong || usernameStatus === "taken" ? "border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : usernameStatus === "available" ? "border-emerald-500 ring-2 ring-emerald-500" : "border-border"}`}
                 />
                 {mode === "register" &&
                   usernameStatus &&
@@ -216,9 +359,14 @@ function AuthPage() {
                     <CircleX className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-red-500" />
                   ))}
               </div>
-              {mode === "register" && usernameStatus === "taken" && (
+              {mode === "register" && usernameTooLong && (
                 <span className="mt-1 block text-xs font-semibold text-red-500">
-                  ئەم ناوە هەیە بیگۆڕە
+                  لە 20 پیت کەمتر
+                </span>
+              )}
+              {mode === "register" && !usernameTooLong && usernameStatus === "taken" && (
+                <span className="mt-1 block text-xs font-semibold text-red-500">
+                  ئەم ناوە پێشتر بەکارهاتووە، تکایە ناوێکی تر هەڵبژێرە
                 </span>
               )}
               {mode === "login" && loginInvalid && (
@@ -256,7 +404,7 @@ function AuthPage() {
 
             {mode === "register" && (
               <div dir="rtl" className="grid grid-cols-2 gap-3">
-                <label className="block">
+                <div className="block">
                   <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
                     تەمەن
                   </span>
@@ -271,8 +419,8 @@ function AuthPage() {
                       setIsBirthYearModalOpen(false);
                     }}
                   />
-                </label>
-                <label className="block">
+                </div>
+                <div className="block">
                   <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
                     شار
                   </span>
@@ -287,17 +435,27 @@ function AuthPage() {
                       setIsCityModalOpen(false);
                     }}
                   />
-
-                </label>
+                </div>
               </div>
             )}
 
             <button
               type="submit"
-              className="press flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-[var(--shadow-glow)]"
+              disabled={isSubmitting}
+              className="press flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-[var(--shadow-glow)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {mode === "login" ? <LogIn className="size-5" /> : <UserPlus className="size-5" />}
-              {mode === "login" ? "چوونەژوورەوە" : "دروستکردنی هەژمار"}
+              {isSubmitting ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : mode === "login" ? (
+                <LogIn className="size-5" />
+              ) : (
+                <UserPlus className="size-5" />
+              )}
+              {isSubmitting
+                ? "چاوەڕێ بە..."
+                : mode === "login"
+                  ? "چوونەژوورەوە"
+                  : "دروستکردنی هەژمار"}
             </button>
           </form>
 

@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Crown } from "lucide-react";
-import { globalPlayers, useApp, type Player } from "@/lib/app-store";
+import { Crown, Loader2 } from "lucide-react";
+import { useApp, type Player } from "@/lib/app-store";
 import { PlayerProfileSheet } from "@/components/PlayerProfileSheet";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/app/leaderboards")({
   head: () => ({
@@ -27,57 +28,70 @@ const tabs: { id: Tab; label: string }[] = [
 const ROW = 68;
 
 function LeaderboardsTab() {
-  const { visibleFriends, user, gold, isProMember, equippedProFrame } = useApp();
+  const { visibleFriends, isProMember, equippedProFrame } = useApp();
   const [tab, setTab] = useState<Tab>("points");
   const [selected, setSelected] = useState<Player | null>(null);
-  const [drift, setDrift] = useState<Record<string, { points: number; gold: number }>>({});
+  const [profilePlayers, setProfilePlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setDrift((prev) => {
-        const next = { ...prev };
-        const pool = [...globalPlayers.map((p) => p.id), "me"];
-        for (let i = 0; i < 3; i++) {
-          const pick = pool[Math.floor(Math.random() * pool.length)];
-          if (!pick) continue;
-          const cur = next[pick] ?? { points: 0, gold: 0 };
-          next[pick] = {
-            points: cur.points + Math.floor(Math.random() * 160),
-            gold: cur.gold + Math.floor(Math.random() * 90),
-          };
+    const client = supabase;
+    if (!client) {
+      setLoading(false);
+      setLoadError("بەستەری داتابەیس بەردەست نییە");
+      return;
+    }
+    let cancelled = false;
+    const loadProfiles = async () => {
+      setLoading(true);
+      setLoadError(null);
+      const { data, error } = await client
+        .from("profiles")
+        .select("id, username, avatar_url, gold, wins, games_played")
+        .order("gold", { ascending: false });
+      if (error) {
+        console.error("Supabase Profiles Error:", error);
+        if (!cancelled) {
+          setLoadError("نەتوانرا ڕیزبەندییەکە بار بکرێت");
+          setLoading(false);
         }
-        return next;
-      });
-    }, 2600);
-    return () => clearInterval(id);
+        return;
+      }
+      const players = (data ?? []).map((profile): Player => ({
+        id: String(profile.id),
+        name: String(profile.username ?? "یاریزان"),
+        handle: "",
+        avatar: String(profile.avatar_url ?? ""),
+        online: true,
+        points: 0,
+        gold: Number(profile.gold ?? 0),
+        games_played: Number(profile.games_played ?? 0),
+        wins: Number(profile.wins ?? 0),
+      }));
+      if (!cancelled) {
+        setProfilePlayers(players);
+        setLoading(false);
+      }
+    };
+    void loadProfiles();
+    const channel = client
+      .channel("leaderboard-profiles")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => void loadProfiles(),
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void client.removeChannel(channel);
+    };
   }, []);
 
-  const me: Player = useMemo(
-    () => ({
-      id: "me",
-      name: user?.name ?? "تۆ",
-      handle: user?.handle ?? "",
-      online: user?.online ?? true,
-      avatar: user?.avatar ?? "",
-      points: user?.points ?? 0,
-      gold,
-      games: user?.games ?? 0,
-      wins: user?.wins ?? 0,
-    }),
-    [user, gold],
-  );
-
   const rows = useMemo(() => {
-    const live = (p: Player): Player => {
-      const d = drift[p.id];
-      return d ? { ...p, points: p.points + d.points, gold: p.gold + d.gold } : p;
-    };
-    const base = tab === "friends" ? [...visibleFriends, me] : [...globalPlayers, me];
-    const list = base.map(live);
-    return tab === "gold"
-      ? list.sort((a, b) => b.gold - a.gold)
-      : list.sort((a, b) => b.points - a.points);
-  }, [tab, visibleFriends, me, drift]);
+    return profilePlayers;
+  }, [profilePlayers]);
 
   return (
     <section className="min-h-screen px-4 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] pb-32">
@@ -97,52 +111,62 @@ function LeaderboardsTab() {
         ))}
       </div>
 
-      <div className="relative" style={{ height: rows.length * ROW }}>
-        {rows.map((p, i) => (
-          <div
-            key={p.id}
-            style={{ transform: `translateY(${i * ROW}px)` }}
-            className={`glass absolute inset-x-0 top-0 flex h-[60px] items-center gap-3 rounded-2xl p-3 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              p.id === "me" ? "border-primary/60 shadow-[var(--shadow-glow)]" : ""
-            }`}
-          >
-            <span className="w-6 text-center text-sm font-extrabold text-primary">{i + 1}</span>
-            {p.avatar ? (
-              <button
-                onClick={() => setSelected(p)}
-                className="press shrink-0"
-                aria-label={`پرۆفایلی ${p.name}`}
-              >
-                <img
-                  src={p.avatar}
-                  alt={p.name}
-                  className={`size-9 rounded-full bg-secondary ${p.id === "me" && isProMember && equippedProFrame ? "border-2 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,.8)]" : ""}`}
-                />
-              </button>
-            ) : (
-              <span className="size-9 rounded-full bg-secondary" />
-            )}
-            <button onClick={() => setSelected(p)} className="press flex-1 text-right font-bold">
-              <span
-                className={
-                  p.id === "me" && isProMember
-                    ? "bg-gradient-to-r from-yellow-200 to-amber-600 bg-clip-text text-transparent"
-                    : ""
-                }
-              >
-                {p.name}
-              </span>
-              {p.id === "me" && isProMember && (
-                <Crown className="mr-1 inline size-3 text-yellow-500" />
+      {loading ? (
+        <div className="flex min-h-48 items-center justify-center text-primary">
+          <Loader2 className="size-7 animate-spin" aria-label="بارکردن" />
+        </div>
+      ) : loadError ? (
+        <p className="pt-10 text-center text-sm text-destructive">{loadError}</p>
+      ) : rows.length === 0 ? (
+        <p className="pt-10 text-center text-sm text-muted-foreground">هیچ یاریزانێک دیار نییە</p>
+      ) : (
+        <div className="relative" style={{ height: rows.length * ROW }}>
+          {rows.map((p, i) => (
+            <div
+              key={p.id}
+              style={{ transform: `translateY(${i * ROW}px)` }}
+              className={`glass absolute inset-x-0 top-0 flex h-[60px] items-center gap-3 rounded-2xl p-3 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                p.id === "me" ? "border-primary/60 shadow-[var(--shadow-glow)]" : ""
+              }`}
+            >
+              <span className="w-6 text-center text-sm font-extrabold text-primary">{i + 1}</span>
+              {p.avatar ? (
+                <button
+                  onClick={() => setSelected(p)}
+                  className="press shrink-0"
+                  aria-label={`پرۆفایلی ${p.name}`}
+                >
+                  <img
+                    src={p.avatar}
+                    alt={p.name}
+                    className={`size-9 rounded-full bg-secondary ${p.id === "me" && isProMember && equippedProFrame ? "border-2 border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,.8)]" : ""}`}
+                  />
+                </button>
+              ) : (
+                <span className="size-9 rounded-full bg-secondary" />
               )}
-              {p.id === "me" && <span className="mr-2 text-xs text-primary">(تۆ)</span>}
-            </button>
-            <span className="text-sm font-bold tabular-nums text-gold transition-all duration-500">
-              {tab === "gold" ? p.gold : p.points}
-            </span>
-          </div>
-        ))}
-      </div>
+              <button onClick={() => setSelected(p)} className="press flex-1 text-right font-bold">
+                <span
+                  className={
+                    p.id === "me" && isProMember
+                      ? "bg-gradient-to-r from-yellow-200 to-amber-600 bg-clip-text text-transparent"
+                      : ""
+                  }
+                >
+                  {p.name}
+                </span>
+                {p.id === "me" && isProMember && (
+                  <Crown className="mr-1 inline size-3 text-yellow-500" />
+                )}
+                {p.id === "me" && <span className="mr-2 text-xs text-primary">(تۆ)</span>}
+              </button>
+              <span className="text-sm font-bold tabular-nums text-gold transition-all duration-500">
+                {p.gold}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {selected && (
         <PlayerProfileSheet

@@ -19,8 +19,8 @@ import { formatHandle, NAME_MAX, useApp } from "@/lib/app-store";
 import { toast } from "sonner";
 import { useHideChrome } from "@/components/chrome";
 import { PlayerProfileSheet } from "@/components/PlayerProfileSheet";
-import { Switch } from "@/components/ui/switch";
 import { createClient } from "@supabase/supabase-js";
+import { upsertProfile } from "@/lib/supabase";
 
 const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] || "";
 const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
@@ -47,12 +47,15 @@ function ProfileTab() {
     equippedProBanner,
     visibleFriends,
     hideProfileDetails,
+    online,
   } = useApp();
   const handleText = formatHandle(user?.handle);
   const age = user?.birth_year ? new Date().getFullYear() - Number(user.birth_year) : null;
   const profileDetails = user?.city && age && age > 0 ? `${user.city} • ${age} ساڵ` : null;
+  const bio = user?.bio?.trim();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [copiedHandle, setCopiedHandle] = useState(false);
   const [socialList, setSocialList] = useState<"followers" | "following" | null>(null);
   const [selectedSocialPlayer, setSelectedSocialPlayer] = useState<
     (typeof visibleFriends)[number] | null
@@ -79,11 +82,19 @@ function ProfileTab() {
             : undefined
         }
       >
-        <img
-          src={user?.avatar}
-          alt={user?.name ?? "پرۆفایل"}
-          className={`size-24 rounded-full bg-secondary ${isProMember && equippedProFrame ? "border-4 border-yellow-300 shadow-[0_0_24px_rgba(250,204,21,.8)]" : "border-2 border-primary/60"}`}
-        />
+        <div className="relative">
+          <img
+            src={user?.avatar}
+            alt={user?.name ?? "پرۆفایل"}
+            className={`size-24 rounded-full bg-secondary ${isProMember && equippedProFrame ? "border-4 border-yellow-300 shadow-[0_0_24px_rgba(250,204,21,.8)]" : "border-2 border-primary/60"}`}
+          />
+          {online && (
+            <span
+              aria-label="سەرهێڵ"
+              className="absolute bottom-0 right-0 size-4 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.95)] ring-2 ring-background"
+            />
+          )}
+        </div>
         <button
           onClick={() => setEditOpen(true)}
           aria-label="دەستکاری پرۆفایل"
@@ -96,7 +107,9 @@ function ProfileTab() {
             {profileDetails}
           </span>
         )}
-        <div className={`${profileDetails && !hideProfileDetails ? "mt-2" : "mt-3"} flex items-center gap-2`}>
+        <div
+          className={`${profileDetails && !hideProfileDetails ? "mt-2" : "mt-3"} flex items-center gap-2`}
+        >
           <h1
             className={`text-2xl font-extrabold ${isProMember ? "bg-gradient-to-r from-yellow-200 via-yellow-500 to-amber-700 bg-clip-text text-transparent" : ""}`}
           >
@@ -112,29 +125,37 @@ function ProfileTab() {
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard
-                ?.writeText(handleText)
-                .then(() => toast.success("یوزەر کۆپی کرا"));
+              navigator.clipboard?.writeText(handleText).then(() => {
+                setCopiedHandle(true);
+                window.setTimeout(() => setCopiedHandle(false), 2000);
+              });
             }}
-            className="mt-1 text-xs text-muted-foreground"
+            className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"
           >
             {handleText}
+            {copiedHandle && <Check className="size-3 text-emerald-400" />}
           </button>
         )}
       </div>
+
+      {bio && (
+        <div className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-center text-sm text-slate-200">
+          <p className="whitespace-pre-wrap break-words">{bio}</p>
+        </div>
+      )}
 
       <div className="glass mt-4 rounded-2xl border border-yellow-300/40 p-4">
         <div className="flex items-center justify-center gap-8 text-center">
           <button
             onClick={() => setSocialList("followers")}
-            className="press min-w-24 rounded-2xl p-2 text-white"
+            className="press min-w-24 cursor-pointer rounded-2xl border border-white/10 px-4 py-3 text-white transition-all hover:bg-white/5 active:scale-95"
           >
             <p className="text-sm font-bold text-white">followers</p>
             <p className="mt-1 text-2xl font-black text-white">{visibleFriends.length}</p>
           </button>
           <button
             onClick={() => setSocialList("following")}
-            className="press min-w-24 rounded-2xl p-2 text-white"
+            className="press min-w-24 cursor-pointer rounded-2xl border border-white/10 px-4 py-3 text-white transition-all hover:bg-white/5 active:scale-95"
           >
             <p className="text-sm font-bold text-white">following</p>
             <p className="mt-1 text-2xl font-black text-white">{visibleFriends.length}</p>
@@ -145,7 +166,7 @@ function ProfileTab() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Stat label="خاڵەکان" value={user?.points ?? 0} />
         <Stat label="زێڕ" value={gold} />
-        <Stat label="یارییە کراوەکان" value={user?.games ?? 0} />
+        <Stat label="یارییە کراوەکان" value={user?.games_played ?? 0} />
         <Stat label="بردنەوە" value={user?.wins ?? 0} />
       </div>
 
@@ -222,9 +243,17 @@ function SocialListOverlay({
 }
 
 function EditProfile({ onClose }: { onClose: () => void }) {
-  const { user, updateProfile, isNameTaken, isHandleAvailable, nameCooldownDaysLeft } = useApp();
+  const {
+    user,
+    updateProfile,
+    isNameTaken,
+    isHandleAvailable,
+    nameCooldownDaysLeft,
+    usernameCooldownDaysLeft,
+  } = useApp();
   const [name, setName] = useState(user?.name ?? "");
   const [handle, setHandle] = useState(user?.handle ?? "");
+  const [bio, setBio] = useState(user?.bio ?? "");
   const [avatar, setAvatar] = useState(user?.avatar ?? "");
   const [handleStatus, setHandleStatus] = useState<"available" | "taken" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -232,13 +261,18 @@ function EditProfile({ onClose }: { onClose: () => void }) {
   useHideChrome();
 
   const locked = nameCooldownDaysLeft > 0;
+  const usernameLocked = usernameCooldownDaysLeft > 0;
+  const originalHandle = user?.handle ?? "";
+  const handleChanged = handle.trim() !== originalHandle.trim();
   const tooLong = name.trim().length > NAME_MAX;
   const taken = !tooLong && isNameTaken(name);
   const empty = name.trim().length === 0;
   const valid = !tooLong && !taken && !empty;
   const hasKurdish = /[\u0600-\u06FF]/.test(handle);
-  const handleTooLong = handle.length > 15;
+  const handleTooLong = handle.length >= 15;
   const handleValidFormat = handle.length === 0 || (!hasKurdish && !handleTooLong);
+  const bioTooLong = bio.length >= 150;
+  const bioRemaining = Math.max(0, 150 - bio.length);
 
   useEffect(() => {
     if (!handleValidFormat) {
@@ -264,8 +298,26 @@ function EditProfile({ onClose }: { onClose: () => void }) {
   };
 
   const save = () => {
-    if ((!valid && !locked) || handleStatus !== "available") return;
-    updateProfile({ name: locked ? undefined : name.trim(), handle: handle.trim(), avatar });
+    if (
+      (!valid && !locked) ||
+      handleStatus !== "available" ||
+      bioTooLong ||
+      (usernameLocked && handleChanged)
+    )
+      return;
+    updateProfile({
+      name: locked ? undefined : name.trim(),
+      handle: handle.trim(),
+      bio: bio.trim(),
+      avatar,
+    });
+    if (user?.id) {
+      void upsertProfile({
+        id: user.id,
+        username: name.trim(),
+        avatar_url: avatar,
+      });
+    }
     onClose();
   };
 
@@ -282,6 +334,10 @@ function EditProfile({ onClose }: { onClose: () => void }) {
         ? "border-emerald-500 ring-2 ring-emerald-500"
         : "border-slate-200";
 
+  const bioBorderClass = bioTooLong
+    ? "border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+    : "border-slate-200";
+
   return (
     <div className="animate-soft-in fixed inset-0 z-50 flex flex-col bg-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-8 text-slate-900">
       <div className="flex items-center justify-between">
@@ -295,7 +351,12 @@ function EditProfile({ onClose }: { onClose: () => void }) {
         <h2 className="text-lg font-bold">دەستکاری پرۆفایل</h2>
         <button
           onClick={save}
-          disabled={(!locked && !valid) || handleStatus !== "available"}
+          disabled={
+            (!locked && !valid) ||
+            handleStatus !== "available" ||
+            bioTooLong ||
+            (usernameLocked && handleChanged)
+          }
           aria-label="پاشەکەوتکردن"
           className="press flex size-11 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_0_24px_-2px_rgba(16,185,129,0.9)] disabled:opacity-40 disabled:shadow-none"
         >
@@ -332,7 +393,7 @@ function EditProfile({ onClose }: { onClose: () => void }) {
           />
           {locked ? (
             <p className="mt-2 text-[11px] font-light text-slate-500">
-              دەتوانیت دوای {nameCooldownDaysLeft} ڕۆژ ناوەکەت بگۆڕیت
+              ناتوانیت ناوەکەت بگۆڕیت تا 3 ڕۆژی تر
             </p>
           ) : tooLong ? (
             <p className="mt-2 text-[11px] font-light text-red-500">
@@ -352,7 +413,7 @@ function EditProfile({ onClose }: { onClose: () => void }) {
               maxLength={15}
               onChange={(event) => setHandle(event.target.value)}
               placeholder="your_handle"
-              className={`w-full rounded-2xl border-2 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all ${handleBorderClass}`}
+              className={`w-full rounded-2xl border-2 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all ${usernameLocked && handleChanged ? "border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : handleBorderClass}`}
             />
             {handleStatus === "available" && (
               <CircleCheck className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-emerald-500" />
@@ -367,8 +428,35 @@ function EditProfile({ onClose }: { onClose: () => void }) {
           {!hasKurdish && handleTooLong && (
             <p className="mt-1 text-xs font-semibold text-red-500">تکایە لە 15 پیت زیاتر نەبێت</p>
           )}
-          {!hasKurdish && !handleTooLong && handleStatus === "taken" && (
+          {usernameLocked && handleChanged && (
+            <p className="mt-1 text-xs font-semibold text-red-500">
+              ناتوانیت یوزەرنەیمەکەت بگۆڕیت تا 10 ڕۆژی تر
+            </p>
+          )}
+          {!usernameLocked && !hasKurdish && handleTooLong && (
+            <p className="mt-1 text-xs font-semibold text-red-500">لە ١٥ پیت کەمتر</p>
+          )}
+          {!usernameLocked && !hasKurdish && !handleTooLong && handleStatus === "taken" && (
             <p className="mt-1 text-xs font-semibold text-red-500">ئەم یوزرە هەیە</p>
+          )}
+        </div>
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold text-slate-500">بیۆ</span>
+          <textarea
+            value={bio}
+            maxLength={150}
+            rows={4}
+            onChange={(event) => setBio(event.target.value)}
+            placeholder="دەربارەی خۆت بنووسە"
+            className={`w-full resize-none rounded-2xl border-2 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all ${bioBorderClass}`}
+          />
+          <p
+            className={`mt-1 text-xs ${bioTooLong ? "font-semibold text-red-500" : "text-slate-500"}`}
+          >
+            {bioRemaining}
+          </p>
+          {bioTooLong && (
+            <p className="mt-1 text-xs font-semibold text-red-500">پێویستە لە ١٥٠ پیت کەمتر بێت</p>
           )}
         </div>
       </div>
@@ -501,9 +589,14 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
               </p>
               <div className="mt-5 flex gap-3">
                 <button
-                  onClick={() => {
-                    deleteAccount();
-                    navigate({ to: "/" });
+                  onClick={async () => {
+                    try {
+                      await deleteAccount();
+                    } catch (error) {
+                      console.error("Account deletion failed:", error);
+                    } finally {
+                      navigate({ to: "/" });
+                    }
                   }}
                   className="press flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white"
                 >
@@ -565,7 +658,6 @@ function PrivacySettings({ onClose }: { onClose: () => void }) {
     hideProfileDetails,
     setHideProfileDetails,
   } = useApp();
-              <Switch checked={online} onCheckedChange={setOnline} aria-label="سەرهێڵ" />
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-4"
@@ -592,7 +684,7 @@ function PrivacySettings({ onClose }: { onClose: () => void }) {
             className="press flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm hover:bg-slate-100 active:bg-slate-200"
           >
             <span className="font-semibold">{online ? "سەرهێڵ" : "دەرهێڵ"}</span>
-            <span className={`size-4 rounded-full ${online ? "bg-primary" : "bg-destructive"}`} />
+            <PrivacyToggle checked={online} ariaLabel="سەرهێڵ" />
           </button>
           <button
             onClick={() => setHideFollowing(!hideFollowing)}
@@ -601,25 +693,33 @@ function PrivacySettings({ onClose }: { onClose: () => void }) {
             <span className="font-semibold">
               {hideFollowing ? "following داخرا" : "following بشارەوە"}
             </span>
-            <span
-              className={`size-4 rounded-full ${hideFollowing ? "bg-primary" : "bg-slate-300"}`}
-            />
+            <PrivacyToggle checked={hideFollowing} ariaLabel="following بشارەوە" />
           </button>
           <button
             onClick={() => setHideProfileDetails(!hideProfileDetails)}
             className="press flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm hover:bg-slate-100 active:bg-slate-200"
           >
             <span className="font-semibold">ناونیشان بشارەوە</span>
-            <Switch
-              checked={hideProfileDetails}
-              onCheckedChange={setHideProfileDetails}
-              onClick={(event) => event.stopPropagation()}
-              aria-label="ناونیشان بشارەوە"
-            />
+            <PrivacyToggle checked={hideProfileDetails} ariaLabel="ناونیشان بشارەوە" />
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function PrivacyToggle({ checked, ariaLabel }: { checked: boolean; ariaLabel: string }) {
+  return (
+    <span
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      className={`relative block h-6 w-12 shrink-0 rounded-full transition-colors duration-200 ${checked ? "bg-emerald-500" : "bg-red-500"}`}
+    >
+      <span
+        className={`absolute top-0.5 size-5 rounded-full bg-slate-900 shadow-md transition-transform duration-200 ease-out ${checked ? "right-0.5 -translate-x-6" : "right-0.5"}`}
+      />
+    </span>
   );
 }
 

@@ -793,7 +793,7 @@ export function SnakesGame({
             handle: "",
             online: true,
             avatar: selectedPlayer.avatar,
-            games: 0,
+            games_played: 0,
             wins: 0,
             gold: 0,
           }}

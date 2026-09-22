@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type Message = {
   id: string;
@@ -14,20 +15,35 @@ export type Message = {
   text: string;
   at: number;
   imageUrl?: string;
+  readAt?: number;
+  reaction?: string;
+};
+
+type DatabaseMessage = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  body: string;
+  image_url?: string | null;
+  read_at?: string | null;
+  reaction?: string | null;
+  created_at: string;
 };
 
 export type Friend = {
   id: string;
   name: string;
   handle?: string;
+  bio?: string;
   birth_year?: string;
   city?: string;
   online?: boolean;
   avatar: string;
   points: number;
   gold: number;
-  games: number;
+  games_played: number;
   wins: number;
+  losses?: number;
 };
 
 export type Group = {
@@ -42,26 +58,29 @@ export type Player = {
   id: string;
   name: string;
   handle?: string;
+  bio?: string;
   birth_year?: string;
   city?: string;
   online?: boolean;
   avatar: string;
   points: number;
   gold: number;
-  games: number;
+  games_played: number;
   wins: number;
+  losses?: number;
 };
 
 export type User = {
   id: string;
   name: string;
   handle?: string;
+  bio?: string;
   birth_year?: string;
   city?: string;
   online?: boolean;
   avatar: string;
   points: number;
-  games: number;
+  games_played: number;
   wins: number;
 };
 
@@ -69,10 +88,13 @@ type SavedAccount = {
   id: string;
   name: string;
   handle?: string;
+  bio?: string;
   birth_year?: string;
   city?: string;
   password?: string;
   lastPasswordChangedAt?: number;
+  last_username_change?: number;
+  last_name_change?: number;
   email?: string;
   hideProfileDetails?: boolean;
   hideFollowing?: boolean;
@@ -100,6 +122,19 @@ type State = {
   dailyGoldClaimedDate: string | null;
 };
 
+export type ProfileRecord = {
+  id: string;
+  username: string;
+  avatar_url?: string | null;
+  city?: string | null;
+  birth_year?: string | null;
+  gold?: number | null;
+  points?: number | null;
+  games_played?: number | null;
+  wins?: number | null;
+  losses?: number | null;
+};
+
 export const NAME_MAX = 26;
 export const NAME_COOLDOWN_DAYS = 30;
 
@@ -115,42 +150,7 @@ const avatarFor = (seed: string) =>
 export const formatHandle = (handle: string | undefined) =>
   handle?.trim() ? `@${handle.trim().replace(/^@+/, "")}` : "";
 
-const makeFriend = (
-  id: string,
-  name: string,
-  points: number,
-  gold: number,
-  games: number,
-  wins: number,
-): Friend => ({ id, name, avatar: avatarFor(id), online: true, points, gold, games, wins });
-
-const now = Date.now();
-const min = 60_000;
-
-const seedFriends: Friend[] = [
-  makeFriend("f1", "ئاکۆ", 4820, 1340, 210, 128),
-  makeFriend("f2", "شیلان", 4310, 980, 188, 101),
-  makeFriend("f3", "هێمن", 3990, 2210, 240, 132),
-  makeFriend("f4", "ڕۆژان", 3110, 640, 96, 44),
-  makeFriend("f5", "کارزان", 2870, 1520, 143, 71),
-  makeFriend("f6", "دەریا", 2240, 410, 77, 30),
-];
-
-const seedRequests: Friend[] = [
-  makeFriend("r1", "ئارام", 3420, 760, 132, 70),
-  makeFriend("r2", "نەرمین", 2980, 1120, 118, 55),
-  makeFriend("r3", "زانا", 2510, 430, 88, 39),
-];
-
-export const globalPlayers: Player[] = [
-  ...seedFriends,
-
-  makeFriend("g1", "سۆران", 7120, 3050, 380, 244),
-  makeFriend("g2", "ئەڤین", 6640, 4210, 355, 219),
-  makeFriend("g3", "بەختیار", 6010, 1890, 300, 176),
-  makeFriend("g4", "نیشتمان", 5480, 5120, 412, 232),
-  makeFriend("g5", "هەڵاڵە", 5090, 2760, 268, 149),
-];
+export const globalPlayers: Player[] = [];
 
 const seedState = (): State => ({
   user: null,
@@ -158,39 +158,13 @@ const seedState = (): State => ({
   gold: 75,
   unlockedStickerSlots: [],
   online: true,
-  friends: seedFriends,
-  friendRequests: seedRequests,
+  friends: [],
+  friendRequests: [],
   blockedIds: [],
-  groups: [
-    {
-      id: "gr1",
-      name: "تیمی مارەکان",
-      code: "482913",
-      memberIds: ["f1", "f2", "f3"],
-      color: "violet",
-    },
-  ],
-  directMessages: {
-    f1: [
-      { id: "m1", senderId: "f1", text: "سڵاو، یارییەک بکەین؟", at: now - 42 * min },
-      { id: "m2", senderId: "me", text: "بەڵێ، چەند خولەک", at: now - 40 * min },
-      { id: "m3", senderId: "f1", text: "ئامادەم 🙂", at: now - 12 * min },
-      { id: "m4", senderId: "f1", text: "کوا؟", at: now - 8 * min },
-      { id: "m5", senderId: "f1", text: "دەستپێبکەین", at: now - 5 * min },
-    ],
-    f2: [
-      { id: "m6", senderId: "f2", text: "تەختەی نوێت بینی؟", at: now - 120 * min },
-      { id: "m7", senderId: "f2", text: "زۆر جوانە!", at: now - 118 * min },
-    ],
-    f3: [{ id: "m8", senderId: "me", text: "دواتر یاری دەکەین", at: now - 300 * min }],
-  },
-  groupMessages: {
-    gr1: [
-      { id: "gm1", senderId: "f2", text: "ئەمشەو یاری گروپی؟", at: now - 60 * min },
-      { id: "gm2", senderId: "f3", text: "من ئامادەم", at: now - 55 * min },
-    ],
-  },
-  readAt: { f3: now },
+  groups: [],
+  directMessages: {},
+  groupMessages: {},
+  readAt: {},
   tokenId: "t1",
   boardId: "b1",
   nameChangedAt: null,
@@ -201,7 +175,14 @@ const seedState = (): State => ({
 });
 
 type Ctx = State & {
-  register: (name: string, password: string, birth_year?: string, city?: string) => boolean;
+  register: (
+    name: string,
+    password: string,
+    birth_year?: string,
+    city?: string,
+    id?: string,
+  ) => boolean;
+  loginWithProfile: (profile: ProfileRecord, password: string) => void;
   login: (name: string, password: string) => boolean;
   loginSaved: () => void;
   logout: () => void;
@@ -216,9 +197,11 @@ type Ctx = State & {
   sendDirect: (friendId: string, text: string, imageUrl?: string) => void;
   sendGroup: (groupId: string, text: string) => void;
   markRead: (chatId: string) => void;
+  reactToMessage: (messageId: string, reaction: string) => void;
   unreadFor: (friendId: string) => number;
   totalUnread: number;
   blockFriend: (friendId: string) => void;
+  removeFriend: (friendId: string) => void;
   unblockFriend: (friendId: string) => void;
   createGroup: (name: string, memberIds: string[]) => void;
   leaveGroup: (groupId: string) => void;
@@ -234,14 +217,17 @@ type Ctx = State & {
   acceptRequest: (id: string) => void;
   declineRequest: (id: string) => void;
   requestFriend: (player: Player) => "added" | "exists";
+  addFriend: (friend: Friend) => void;
   isNameTaken: (name: string) => boolean;
   nameCooldownDaysLeft: number;
+  usernameCooldownDaysLeft: number;
   updateProfile: (data: {
     name?: string | undefined;
     avatar?: string | undefined;
     handle?: string | undefined;
+    bio?: string | undefined;
   }) => void;
-  deleteAccount: () => void;
+  deleteAccount: () => Promise<void>;
   isUsernameAvailable: (name: string) => boolean;
   isHandleAvailable: (handle: string) => boolean;
   updatePassword: (password: string) => boolean;
@@ -292,6 +278,221 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!supabase || !state.user?.id) return;
+    let cancelled = false;
+    const refreshProfile = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(
+          "id, username, avatar_url, city, birth_year, points, gold, games_played, wins, losses",
+        )
+        .eq("id", state.user?.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.error("Supabase profile refresh error:", error);
+        return;
+      }
+      if (!data) return;
+      const gamesPlayed = Number(data.games_played ?? 0);
+      const gold = Number(data.gold ?? 75);
+      setState((previous) => ({
+        ...previous,
+        gold,
+        user: previous.user
+          ? {
+              ...previous.user,
+              id: data.id,
+              name: data.username ?? previous.user.name,
+              avatar: data.avatar_url || previous.user.avatar,
+              city: data.city ?? previous.user.city,
+              birth_year: data.birth_year ?? previous.user.birth_year,
+              points: Number(data.points ?? 0),
+              gold,
+              games_played: gamesPlayed,
+              wins: Number(data.wins ?? 0),
+            }
+          : previous.user,
+      }));
+    };
+    void refreshProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.user?.id]);
+
+  useEffect(() => {
+    if (!supabase || !state.user?.id) return;
+    let cancelled = false;
+    const accountId = state.user.id;
+    const loadMessages = async () => {
+      const { data, error } = await supabase
+        .from("direct_messages")
+        .select("id, sender_id, receiver_id, body, image_url, read_at, reaction, created_at")
+        .or(`sender_id.eq.${accountId},receiver_id.eq.${accountId}`)
+        .order("created_at", { ascending: true });
+      if (cancelled || error) {
+        if (error) console.error("Supabase messages refresh error:", error);
+        return;
+      }
+      const nextMessages: Record<string, Message[]> = {};
+      for (const row of (data ?? []) as DatabaseMessage[]) {
+        const friendId = row.sender_id === accountId ? row.receiver_id : row.sender_id;
+        const message: Message = {
+          id: row.id,
+          senderId: row.sender_id,
+          text: row.body,
+          imageUrl: row.image_url ?? undefined,
+          readAt: row.read_at ? new Date(row.read_at).getTime() : undefined,
+          reaction: row.reaction ?? undefined,
+          at: new Date(row.created_at).getTime(),
+        };
+        nextMessages[friendId] = [...(nextMessages[friendId] ?? []), message];
+      }
+      setState((previous) => ({ ...previous, directMessages: nextMessages }));
+    };
+    const addMessage = (payload: { new: DatabaseMessage }) => {
+      const row = payload.new;
+      const friendId = row.sender_id === accountId ? row.receiver_id : row.sender_id;
+      const message: Message = {
+        id: row.id,
+        senderId: row.sender_id,
+        text: row.body,
+        imageUrl: row.image_url ?? undefined,
+          readAt: row.read_at ? new Date(row.read_at).getTime() : undefined,
+          reaction: row.reaction ?? undefined,
+        at: new Date(row.created_at).getTime(),
+      };
+      setState((previous) => {
+        const existing = previous.directMessages[friendId] ?? [];
+        if (existing.some((item) => item.id === message.id)) {
+          return {
+            ...previous,
+            directMessages: {
+              ...previous.directMessages,
+              [friendId]: existing.map((item) =>
+                item.id === message.id ? { ...item, reaction: message.reaction, readAt: message.readAt } : item,
+              ),
+            },
+          };
+        }
+        return {
+          ...previous,
+          directMessages: { ...previous.directMessages, [friendId]: [...existing, message] },
+        };
+      });
+    };
+    void loadMessages();
+    const channel = supabase
+      .channel(`direct-messages:${accountId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "direct_messages", filter: `sender_id=eq.${accountId}` },
+        addMessage,
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "direct_messages", filter: `receiver_id=eq.${accountId}` },
+        addMessage,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "direct_messages", filter: `sender_id=eq.${accountId}` },
+        addMessage,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "direct_messages", filter: `receiver_id=eq.${accountId}` },
+        addMessage,
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [state.user?.id]);
+
+  useEffect(() => {
+    if (!supabase || !state.user?.id) return;
+    let cancelled = false;
+    const loadAcceptedFriends = async () => {
+      const accountId = state.user?.id;
+      if (!accountId) return;
+      const { data: requests, error } = await supabase
+        .from("friend_requests")
+        .select("sender_id, receiver_id")
+        .eq("status", "accepted")
+        .or(`sender_id.eq.${accountId},receiver_id.eq.${accountId}`);
+      if (cancelled || error) {
+        if (error) console.error("Supabase friendships refresh error:", error);
+        return;
+      }
+      const acceptedFriends = await Promise.all(
+        (requests ?? []).map(async (request) => {
+          const friendId = request.sender_id === accountId ? request.receiver_id : request.sender_id;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, city, birth_year, online, points, gold, games_played, wins, losses")
+            .eq("id", friendId)
+            .maybeSingle();
+          if (!profile) return null;
+          const gamesPlayed = Number(profile.games_played ?? 0);
+          return {
+            id: String(profile.id),
+            name: String(profile.username ?? "یاریزان"),
+            avatar: String(profile.avatar_url ?? ""),
+            city: profile.city ?? undefined,
+            birth_year: profile.birth_year ?? undefined,
+            online: profile.online !== false,
+            points: Number(profile.points ?? 0),
+            gold: Number(profile.gold ?? 0),
+            games_played: gamesPlayed,
+            wins: Number(profile.wins ?? 0),
+            losses: Number(profile.losses ?? Math.max(0, gamesPlayed - Number(profile.wins ?? 0))),
+          } satisfies Friend;
+        }),
+      );
+      if (cancelled) return;
+      const friends = acceptedFriends.filter((friend): friend is Friend => Boolean(friend));
+      setState((previous) => ({
+        ...previous,
+        friends: [
+          ...(previous.friends ?? []).filter((friend) => friends.some((next) => next.id === friend.id)),
+          ...friends.filter((friend) => !(previous.friends ?? []).some((existing) => existing.id === friend.id)),
+        ],
+      }));
+    };
+    void loadAcceptedFriends();
+    const channel = supabase
+      .channel(`friendships:${state.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friend_requests",
+          filter: `sender_id=eq.${state.user.id}`,
+        },
+        () => void loadAcceptedFriends(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friend_requests",
+          filter: `receiver_id=eq.${state.user.id}`,
+        },
+        () => void loadAcceptedFriends(),
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [state.user?.id]);
+
+  useEffect(() => {
     if (!hydrated) return;
     if (!state.user?.id) return;
     try {
@@ -337,8 +538,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unreadFor = (friendId: string) => {
       if (blockedIds.includes(friendId)) return 0;
       const last = readAt[friendId] ?? 0;
-      return (directMessages[friendId] ?? []).filter((m) => m.senderId !== "me" && m.at > last)
-        .length;
+      return (directMessages[friendId] ?? []).filter(
+        (message) =>
+          message.senderId !== state.user?.id &&
+          message.senderId !== "me" &&
+          message.at > last &&
+          !message.readAt,
+      ).length;
     };
 
     const totalUnread = visibleFriends.reduce((sum, f) => sum + unreadFor(f.id), 0);
@@ -353,7 +559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       visibleFriends,
       blockedFriends,
       hideFollowing: state.savedAccount?.hideFollowing ?? false,
-        hideProfileDetails: state.savedAccount?.hideProfileDetails ?? false,
+      hideProfileDetails: state.savedAccount?.hideProfileDetails ?? false,
       passwordChangedAt,
       currentPassword,
       linkedEmail,
@@ -389,6 +595,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
         return "added";
       },
+      addFriend: (friend) =>
+        patch((p) => ({
+          ...p,
+          friends: (p.friends ?? []).some((existing) => existing.id === friend.id)
+            ? (p.friends ?? [])
+            : [...(p.friends ?? []), friend],
+          friendRequests: (p.friendRequests ?? []).filter((request) => request.id !== friend.id),
+        })),
 
       isNameTaken: (name) => {
         const q = name.trim().toLowerCase();
@@ -399,9 +613,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       },
       nameCooldownDaysLeft: (() => {
-        if (!state.nameChangedAt) return 0;
-        const elapsed = Date.now() - state.nameChangedAt;
-        const total = NAME_COOLDOWN_DAYS * 86_400_000;
+        const changedAt = state.savedAccount?.last_name_change ?? state.nameChangedAt;
+        if (!changedAt) return 0;
+        const elapsed = Date.now() - changedAt;
+        const total = 3 * 86_400_000;
+        return elapsed >= total ? 0 : Math.ceil((total - elapsed) / 86_400_000);
+      })(),
+      usernameCooldownDaysLeft: (() => {
+        const changedAt = state.savedAccount?.last_username_change;
+        if (!changedAt) return 0;
+        const elapsed = Date.now() - changedAt;
+        const total = 10 * 86_400_000;
         return elapsed >= total ? 0 : Math.ceil((total - elapsed) / 86_400_000);
       })(),
       isHandleAvailable: (handle) => {
@@ -434,49 +656,102 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return true;
       },
-      updateProfile: ({ name, avatar, handle }) =>
+      updateProfile: ({ name, avatar, handle, bio }) =>
         patch((p) => {
           if (!p.user) return p;
           const nameChanged = !!name && name !== p.user.name;
+          const usernameChanged =
+            handle !== undefined && handle.trim() !== (p.user.handle ?? "").trim();
+          const changedAt = Date.now();
+          const lastNameChange = p.savedAccount?.last_name_change ?? p.nameChangedAt;
+          const lastUsernameChange = p.savedAccount?.last_username_change;
+          const nameChangeAllowed =
+            !nameChanged || !lastNameChange || changedAt - lastNameChange >= 3 * 86_400_000;
+          const usernameChangeAllowed =
+            !usernameChanged ||
+            !lastUsernameChange ||
+            changedAt - lastUsernameChange >= 10 * 86_400_000;
+          const nextName = nameChanged && !nameChangeAllowed ? p.user.name : (name ?? p.user.name);
+          const nextHandle =
+            usernameChanged && !usernameChangeAllowed
+              ? (p.user.handle ?? "")
+              : (handle ?? p.user.handle ?? "");
           return {
             ...p,
             user: {
               ...p.user,
-              name: name ?? p.user.name,
-              handle: handle ?? p.user.handle ?? "",
+              name: nextName,
+              handle: nextHandle,
+              bio: bio ?? p.user.bio ?? "",
               avatar: avatar ?? p.user.avatar,
             },
             savedAccount: p.savedAccount
               ? {
                   ...p.savedAccount,
-                  name: name ?? p.savedAccount.name,
-                  handle: handle ?? p.savedAccount.handle ?? "",
+                  name: nextName,
+                  handle: nextHandle,
+                  bio: bio ?? p.savedAccount.bio ?? "",
+                  last_name_change:
+                    nameChanged && nameChangeAllowed ? changedAt : p.savedAccount.last_name_change,
+                  last_username_change:
+                    usernameChanged && usernameChangeAllowed
+                      ? changedAt
+                      : p.savedAccount.last_username_change,
                 }
               : p.savedAccount,
-            nameChangedAt: nameChanged ? Date.now() : p.nameChangedAt,
+            nameChangedAt: nameChanged && nameChangeAllowed ? changedAt : p.nameChangedAt,
           };
         }),
-      deleteAccount: () => {
+      deleteAccount: async () => {
         const accountId = state.user?.id;
-        localStorage.removeItem(ACTIVE_SESSION_KEY);
-        if (accountId) {
-          try {
-            localStorage.removeItem(userStorageKey(accountId, "app_state"));
-            localStorage.removeItem(userStorageKey(accountId, "stickers"));
-            localStorage.removeItem(userStorageKey(accountId, "active_sound"));
-            localStorage.removeItem(userStorageKey(accountId, "isPro"));
-            localStorage.removeItem(userStorageKey(accountId, "dailyGoldClaimedDate"));
-            localStorage.removeItem(userStorageKey(accountId, "equippedProFrame"));
-            localStorage.removeItem(userStorageKey(accountId, "equippedProBanner"));
-          } catch {
-            /* ignore */
+        let deletionError: unknown = null;
+
+        try {
+          if (supabase && accountId) {
+            const { error: requestsError } = await supabase
+              .from("friend_requests")
+              .delete()
+              .or(`sender_id.eq.${accountId},receiver_id.eq.${accountId}`);
+            if (requestsError) throw requestsError;
+
+            const { error: profileError } = await supabase
+              .from("profiles")
+              .delete()
+              .eq("id", accountId);
+            if (profileError) throw profileError;
           }
+        } catch (error) {
+          deletionError = error;
+          console.error("Account deletion error:", error);
+        } finally {
+          if (supabase) {
+            const { error: signOutError } = await supabase.auth.signOut();
+            if (signOutError) console.error("Supabase sign-out error:", signOutError);
+          }
+          localStorage.removeItem(ACTIVE_SESSION_KEY);
+          if (accountId) {
+            try {
+              localStorage.removeItem(userStorageKey(accountId, "app_state"));
+              localStorage.removeItem(userStorageKey(accountId, "stickers"));
+              localStorage.removeItem(userStorageKey(accountId, "active_sound"));
+              localStorage.removeItem(userStorageKey(accountId, "isPro"));
+              localStorage.removeItem(userStorageKey(accountId, "dailyGoldClaimedDate"));
+              localStorage.removeItem(userStorageKey(accountId, "equippedProFrame"));
+              localStorage.removeItem(userStorageKey(accountId, "equippedProBanner"));
+            } catch {
+              /* ignore */
+            }
+          }
+          setState(seedState());
         }
-        setState(seedState());
+
+        if (deletionError) {
+          throw deletionError;
+        }
       },
 
-      register: (name, password, birth_year, city) => {
-        const id = accountIdFor(name);
+      register: (name, password, birth_year, city, suppliedId) => {
+        const id = suppliedId ?? accountIdFor(name);
         if (!name.trim() || !password || localStorage.getItem(userStorageKey(id, "app_state"))) {
           return false;
         }
@@ -493,13 +768,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
               avatar: avatarFor(name || "me"),
               points: 0,
               gold: 75,
-              games: 0,
+              games_played: 0,
               wins: 0,
             },
             savedAccount: { id, name, handle: "", birth_year, city, password },
           };
         });
         return true;
+      },
+      loginWithProfile: (profile, password) => {
+        const id = profile.id;
+        const gamesPlayed = profile.games_played ?? 0;
+        setState(() => ({
+          ...seedState(),
+          user: {
+            id,
+            name: profile.username,
+            birth_year: profile.birth_year ?? undefined,
+            city: profile.city ?? undefined,
+            avatar: profile.avatar_url || avatarFor(profile.username),
+            points: profile.points ?? 0,
+            gold: profile.gold ?? 75,
+            games_played: gamesPlayed,
+            wins: profile.wins ?? 0,
+          },
+          gold: profile.gold ?? 75,
+          savedAccount: {
+            id,
+            name: profile.username,
+            birth_year: profile.birth_year ?? undefined,
+            city: profile.city ?? undefined,
+            password,
+          },
+        }));
+        localStorage.setItem(ACTIVE_SESSION_KEY, id);
       },
       login: (name, password) => {
         const id = accountIdFor(name);
@@ -526,7 +828,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             city: stored.user?.city ?? stored.savedAccount?.city,
             avatar: avatarFor(name || "me"),
             points: stored.user?.points ?? 1840,
-            games: stored.user?.games ?? 62,
+            games_played: stored.user?.games_played ?? 62,
             wins: stored.user?.wins ?? 35,
           },
           savedAccount: {
@@ -575,7 +877,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               city: stored.user?.city ?? stored.savedAccount?.city,
               avatar: avatarFor(name),
               points: 1840,
-              games: 62,
+              games_played: 62,
               wins: 35,
             },
             savedAccount: {
@@ -661,28 +963,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
         return true;
       },
-      sendDirect: (friendId, text, imageUrl) =>
+      sendDirect: async (friendId, text, imageUrl) => {
+        const senderId = state.user?.id;
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const messageText = typeof text === "string" ? text : "";
+        const messageImage = typeof imageUrl === "string" && imageUrl ? imageUrl : undefined;
         patch((p) => {
           const directMessages =
             p.directMessages && typeof p.directMessages === "object" ? p.directMessages : {};
           const existingMessages = Array.isArray(directMessages[friendId])
             ? directMessages[friendId]
             : [];
-          const optimisticMessage: Message = {
-            id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            text: typeof text === "string" ? text : "",
-            senderId: "me",
-            imageUrl: typeof imageUrl === "string" && imageUrl ? imageUrl : undefined,
-            at: Date.now(),
-          };
           return {
             ...p,
             directMessages: {
               ...directMessages,
-              [friendId]: [...existingMessages, optimisticMessage],
+              [friendId]: [
+                ...existingMessages,
+                { id: tempId, text: messageText, senderId: senderId ?? "me", imageUrl: messageImage, at: Date.now() },
+              ],
             },
           };
-        }),
+        });
+        if (!supabase || !senderId) return;
+        const { data, error } = await supabase
+          .from("direct_messages")
+          .insert({ sender_id: senderId, receiver_id: friendId, body: messageText, image_url: messageImage })
+          .select("id, sender_id, receiver_id, body, image_url, read_at, reaction, created_at")
+          .single();
+        if (error || !data) {
+          console.error("Supabase message send error:", error);
+          patch((p) => ({
+            ...p,
+            directMessages: {
+              ...p.directMessages,
+              [friendId]: (p.directMessages[friendId] ?? []).filter((message) => message.id !== tempId),
+            },
+          }));
+          return;
+        }
+        const savedMessage = data as DatabaseMessage;
+        const persistedMessage: Message = {
+          id: savedMessage.id,
+          senderId: savedMessage.sender_id,
+          text: savedMessage.body,
+          imageUrl: savedMessage.image_url ?? undefined,
+          at: new Date(savedMessage.created_at).getTime(),
+          reaction: savedMessage.reaction ?? undefined,
+        };
+        patch((p) => {
+          const existing = p.directMessages[friendId] ?? [];
+          if (existing.some((message) => message.id === persistedMessage.id)) {
+            return {
+              ...p,
+              directMessages: {
+                ...p.directMessages,
+                [friendId]: existing.filter((message) => message.id !== tempId),
+              },
+            };
+          }
+          return {
+            ...p,
+            directMessages: {
+              ...p.directMessages,
+              [friendId]: existing.map((message) =>
+                message.id === tempId ? persistedMessage : message,
+              ),
+            },
+          };
+        });
+      },
+      reactToMessage: (messageId, reaction) => {
+        const reactionValue = reaction || null;
+        patch((p) => ({
+          ...p,
+          directMessages: Object.fromEntries(
+            Object.entries(p.directMessages).map(([friendId, messages]) => [
+              friendId,
+              messages.map((message) =>
+                message.id === messageId ? { ...message, reaction: reactionValue ?? undefined } : message,
+              ),
+            ]),
+          ),
+        }));
+        if (!supabase) return;
+        void supabase.from("direct_messages").update({ reaction: reactionValue }).eq("id", messageId);
+      },
       sendGroup: (groupId, text) =>
         patch((p) => ({
           ...p,
@@ -694,18 +1060,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ],
           },
         })),
-      markRead: (chatId) => patch((p) => ({ ...p, readAt: { ...p.readAt, [chatId]: Date.now() } })),
+      markRead: (chatId) => {
+        const readTimestamp = Date.now();
+        const accountId = state.user?.id;
+        patch((p) => ({
+          ...p,
+          readAt: { ...p.readAt, [chatId]: readTimestamp },
+          directMessages: {
+            ...p.directMessages,
+            [chatId]: (p.directMessages[chatId] ?? []).map((message) =>
+              message.senderId !== accountId && message.senderId !== "me" && message.at <= readTimestamp
+                ? { ...message, readAt: readTimestamp }
+                : message,
+            ),
+          },
+        }));
+        if (!supabase || !accountId) return;
+        void supabase
+          .from("direct_messages")
+          .update({ read_at: new Date(readTimestamp).toISOString() })
+          .eq("sender_id", chatId)
+          .eq("receiver_id", accountId)
+          .is("read_at", null);
+      },
       blockFriend: (friendId) =>
         patch((p) => {
           const directMessages = { ...p.directMessages };
           delete directMessages[friendId];
           const readAt = { ...p.readAt };
           delete readAt[friendId];
+          if (supabase && p.user?.id) {
+            void supabase
+              .from("friend_requests")
+              .delete()
+              .or(`and(sender_id.eq.${p.user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${p.user.id})`);
+          }
           return {
             ...p,
             blockedIds: p.blockedIds.includes(friendId)
               ? p.blockedIds
               : [...p.blockedIds, friendId],
+            friends: p.friends.filter((friend) => friend.id !== friendId),
+            directMessages,
+            readAt,
+          };
+        }),
+      removeFriend: (friendId) =>
+        patch((p) => {
+          const directMessages = { ...p.directMessages };
+          delete directMessages[friendId];
+          const readAt = { ...p.readAt };
+          delete readAt[friendId];
+          if (supabase && p.user?.id) {
+            void supabase
+              .from("friend_requests")
+              .delete()
+              .or(`and(sender_id.eq.${p.user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${p.user.id})`);
+          }
+          return {
+            ...p,
+            friends: p.friends.filter((friend) => friend.id !== friendId),
             directMessages,
             readAt,
           };
@@ -792,7 +1206,5 @@ export function useApp() {
 
 export function formatTime(at: number) {
   const d = new Date(at);
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" });
-  return `${time} · ${date}`;
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }

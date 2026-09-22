@@ -24,6 +24,14 @@ import {
 import { toast } from "sonner";
 import { formatTime, useApp, type Friend, type Group } from "@/lib/app-store";
 import { useHideChrome } from "@/components/chrome";
+import { PlayerProfileSheet } from "@/components/PlayerProfileSheet";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] || "";
+const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+type DatabaseFriendRequest = { requestId: string; friend: Friend; status: string };
 
 export const Route = createFileRoute("/app/friends")({
   head: () => ({
@@ -116,15 +124,74 @@ function FriendsRoute() {
 }
 
 function FriendsTab() {
-  const { visibleFriends, unreadFor, friendRequests } = useApp();
+  const { addFriend, visibleFriends, directMessages, unreadFor, user } = useApp();
   const safeFriends = Array.isArray(visibleFriends) ? visibleFriends.filter(Boolean) : [];
-  const safeRequests = Array.isArray(friendRequests) ? friendRequests.filter(Boolean) : [];
+  const [databaseRequests, setDatabaseRequests] = useState<DatabaseFriendRequest[]>([]);
   const [view, setView] = useState<View>("friends");
   const [openFriend, setOpenFriend] = useState<Friend | null>(null);
   const [openGroup, setOpenGroup] = useState<Group | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<Friend | null>(null);
   const [creating, setCreating] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [popup, setPopup] = useState<{ type: "friend" | "group"; id: string } | null>(null);
+
+  useEffect(() => {
+    if (!supabase || !user?.id) {
+      setDatabaseRequests([]);
+      return;
+    }
+    let cancelled = false;
+    const loadRequests = async () => {
+      const { data } = await supabase
+        .from("friend_requests")
+        .select(
+          "id, sender_id, status, profiles:sender_id(username, avatar_url, city, birth_year, online, points, gold, games_played, wins, losses)",
+        )
+        .eq("receiver_id", user.id)
+        .eq("status", "pending");
+      if (cancelled) return;
+      const requests = (data ?? []).flatMap((row) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        if (!profile) return [];
+        const gamesPlayed = Number(profile.games_played ?? 0);
+        const friend: Friend = {
+          id: String(row.sender_id),
+          name: String(profile.username ?? "یاریزان"),
+          avatar: String(profile.avatar_url ?? ""),
+          city: profile.city ?? undefined,
+          birth_year: profile.birth_year ?? undefined,
+          online: profile.online !== false,
+          points: Number(profile.points ?? 0),
+          gold: Number(profile.gold ?? 0),
+          games_played: gamesPlayed,
+          wins: Number(profile.wins ?? 0),
+          losses: Number(profile.losses ?? Math.max(0, gamesPlayed - Number(profile.wins ?? 0))),
+        };
+        return [{ requestId: String(row.id), friend, status: String(row.status) }];
+      });
+      setDatabaseRequests(requests);
+    };
+    void loadRequests();
+    const channel = supabase
+      .channel(`friend-requests:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friend_requests",
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => void loadRequests(),
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  const safeRequests = databaseRequests;
 
   return (
     <section className="min-h-screen px-4 pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] pb-32">
@@ -172,15 +239,16 @@ function FriendsTab() {
           {safeFriends.map((f) => {
             if (!f?.id) return null;
             const unread = unreadFor?.(f.id) ?? 0;
+            const latestMessage = directMessages?.[f.id]?.at(-1);
             return (
               <div
                 key={f.id}
                 className="glass animate-rise-in flex items-center gap-3 rounded-2xl p-3"
               >
                 <button
-                  onClick={() => f?.id && setPopup({ type: "friend", id: f.id })}
+                  onClick={() => f?.id && setOpenFriend(f)}
                   className="press relative"
-                  aria-label={`ڕێکخستنی ${f.name}`}
+                  aria-label={`چاتی ${f.name}`}
                 >
                   <img
                     src={renderProfilePic(f)}
@@ -194,19 +262,24 @@ function FriendsTab() {
                       className="absolute bottom-0 right-0 size-3 rounded-full bg-green-500 ring-2 ring-background"
                     />
                   )}
-                  {unread > 0 && (
-                    <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-                      {unread}
-                    </span>
-                  )}
                 </button>
                 <button
                   onClick={() => f?.id && setOpenFriend(f)}
-                  className="press flex-1 text-right"
+                  className="press min-w-0 flex-1 text-right"
                 >
                   <p className="font-bold">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">{f.points} خاڵ</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {latestMessage?.text?.trim() ||
+                      (latestMessage?.imageUrl ? "وێنە" : "هیچ نامەیەک نییە")}
+                  </p>
                 </button>
+                <div className="flex w-8 shrink-0 items-center justify-center" aria-label="نامەی نوێ">
+                  {unread > 0 && (
+                    <span className="flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -221,10 +294,36 @@ function FriendsTab() {
       )}
 
       {popup && <ActionPopup popup={popup} onClose={() => setPopup(null)} />}
-      {requestsOpen && <FriendRequests onClose={() => setRequestsOpen(false)} />}
+      {requestsOpen && (
+        <FriendRequests
+          requests={databaseRequests}
+          onClose={() => setRequestsOpen(false)}
+          onStatusChange={(requestId, status, friend) => {
+            if (status === "accepted" || status === "rejected") {
+              if (status === "accepted") addFriend(friend);
+              setDatabaseRequests((requests) =>
+                requests.filter((request) => request.requestId !== requestId),
+              );
+            }
+          }}
+        />
+      )}
       {creating && <ConstructionNotice onClose={() => setCreating(false)} />}
       {openFriend?.id && <DirectChat friend={openFriend} onClose={() => setOpenFriend(null)} />}
       {openGroup?.id && <GroupChat group={openGroup} onClose={() => setOpenGroup(null)} />}
+      {selectedProfile?.id && (
+        <PlayerProfileSheet
+          player={selectedProfile}
+          followersCount={safeFriends.length}
+          followingCount={safeFriends.length}
+          allowFriendRequest
+          onMessage={() => {
+            setSelectedProfile(null);
+            setOpenFriend(selectedProfile);
+          }}
+          onClose={() => setSelectedProfile(null)}
+        />
+      )}
     </section>
   );
 }
@@ -299,6 +398,9 @@ function ChatBubble({
   author,
   accent,
   imageUrl,
+  reaction,
+  messageId,
+  onReaction,
 }: {
   mine: boolean;
   text?: string;
@@ -306,23 +408,66 @@ function ChatBubble({
   author?: string | undefined;
   accent?: boolean;
   imageUrl?: string | undefined;
+  reaction?: string | undefined;
+  messageId?: string;
+  onReaction?: (messageId: string, reaction: string) => void;
 }) {
   const safeText = typeof text === "string" ? text : "";
   const codeMatch = /^\d{6}$/.test(safeText.trim());
   const { joinGroupByCode } = useApp();
+  const [reactionMenuOpen, setReactionMenuOpen] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const pressTimer = useRef<number | null>(null);
+  const reactions = ["🤣", "❤️", "🥰", "😁", "💓", "👍", "🫂", "🔥"];
+  const clearPressTimer = () => {
+    if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  };
+  const startLongPress = () => {
+    clearPressTimer();
+    pressTimer.current = window.setTimeout(() => {
+      setPressed(true);
+      setReactionMenuOpen(true);
+    }, 400);
+  };
+  const chooseReaction = (nextReaction: string) => {
+    if (messageId) onReaction?.(messageId, nextReaction);
+    setReactionMenuOpen(false);
+    setPressed(false);
+  };
 
   return (
     <div className={`flex flex-col ${mine ? "items-start" : "items-end"}`}>
       {author && <span className="mb-0.5 text-[10px] text-panel-muted">{author}</span>}
-      <div
-        className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${
+      <div className="relative max-w-[75%]">
+        {reactionMenuOpen && (
+          <div className="absolute bottom-full z-20 mb-2 flex items-center gap-1 rounded-full border border-white/15 bg-background/80 px-2 py-1.5 shadow-xl backdrop-blur-md">
+            {reactions.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => chooseReaction(emoji)}
+                className="flex size-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-125"
+                aria-label={`react ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          onPointerDown={startLongPress}
+          onPointerUp={clearPressTimer}
+          onPointerLeave={clearPressTimer}
+          onDoubleClick={() => chooseReaction("❤️")}
+          className={`rounded-2xl px-3.5 py-2.5 text-sm transition-transform duration-200 ${pressed ? "scale-[1.04]" : ""} ${
           mine
             ? "bg-primary text-primary-foreground"
             : accent
               ? "bg-accent/25 text-panel-foreground"
               : "bg-panel-foreground/5 text-panel-foreground"
-        }`}
-      >
+          }`}
+        >
         {imageUrl && (
           <img
             src={imageUrl}
@@ -343,6 +488,12 @@ function ChatBubble({
         ) : (
           safeText
         )}
+          {reaction && (
+            <span className="absolute -bottom-3 right-2 animate-soft-in rounded-full border border-background bg-background px-1.5 py-0.5 text-sm shadow-md">
+              {reaction}
+            </span>
+          )}
+        </div>
       </div>
       <span className="mt-1 text-[10px] text-panel-muted">
         {formatTime(typeof at === "number" ? at : Date.now())}
@@ -421,7 +572,7 @@ function Composer({
 }
 
 function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }) {
-  const { directMessages, sendDirect, markRead, isProMember } = useApp();
+  const { directMessages, sendDirect, markRead, reactToMessage, isProMember, user } = useApp();
   useHideChrome();
   const friendId = friend?.id;
   const messages =
@@ -471,10 +622,13 @@ function DirectChat({ friend, onClose }: { friend: Friend; onClose: () => void }
             m?.id ? (
               <ChatBubble
                 key={m.id}
-                mine={m?.senderId === "me"}
+                mine={m?.senderId === user?.id || m?.senderId === "me"}
                 text={m?.text ?? ""}
                 imageUrl={m?.imageUrl ?? undefined}
                 at={m?.at}
+                reaction={m?.reaction}
+                messageId={m?.id}
+                onReaction={reactToMessage}
               />
             ) : null,
           )
@@ -575,11 +729,15 @@ function GroupChat({ group, onClose }: { group: Group; onClose: () => void }) {
   );
 }
 
-function FriendRequests({ onClose }: { onClose: () => void }) {
-  const { friendRequests, acceptRequest, declineRequest } = useApp();
-  const safeRequests = Array.isArray(friendRequests)
-    ? friendRequests.filter((request) => request?.id)
-    : [];
+function FriendRequests({
+  requests,
+  onClose,
+  onStatusChange,
+}: {
+  requests: DatabaseFriendRequest[];
+  onClose: () => void;
+  onStatusChange: (requestId: string, status: "accepted" | "rejected", friend: Friend) => void;
+}) {
   useHideChrome();
 
   return (
@@ -597,7 +755,7 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
-        {safeRequests.map((r, i) => (
+        {requests.map(({ requestId, friend: r }, i) => (
           <div
             key={r.id}
             style={{ animationDelay: `${i * 50}ms` }}
@@ -616,8 +774,19 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  acceptRequest(r.id);
-                  toast.success("زیادکرا");
+                  if (!supabase) return;
+                  void supabase
+                    .from("friend_requests")
+                    .update({ status: "accepted" })
+                    .eq("id", requestId)
+                    .then(({ error }) => {
+                      if (error) {
+                        toast.error("نەتوانرا زیاد بکرێت");
+                        return;
+                      }
+                      onStatusChange(requestId, "accepted", r);
+                      toast.success("زیادکرا");
+                    });
                 }}
                 aria-label="زیادکردن"
                 className="press flex items-center gap-1 rounded-2xl border border-primary/40 bg-primary/15 px-3 py-2 text-sm font-bold text-emerald-700 backdrop-blur-md"
@@ -627,8 +796,19 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 onClick={() => {
-                  declineRequest(r.id);
-                  toast("ڕەتکرایەوە");
+                  if (!supabase) return;
+                  void supabase
+                    .from("friend_requests")
+                    .update({ status: "rejected" })
+                    .eq("id", requestId)
+                    .then(({ error }) => {
+                      if (error) {
+                        toast.error("نەتوانرا ڕەت بکرێتەوە");
+                        return;
+                      }
+                      onStatusChange(requestId, "rejected", r);
+                      toast("ڕەتکرایەوە");
+                    });
                 }}
                 aria-label="ڕەتکردنەوە"
                 className="press flex items-center gap-1 rounded-2xl border border-destructive/40 bg-destructive/15 px-3 py-2 text-sm font-bold text-destructive backdrop-blur-md"
@@ -639,7 +819,7 @@ function FriendRequests({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         ))}
-        {safeRequests.length === 0 && (
+        {requests.length === 0 && (
           <p className="pt-10 text-center text-sm text-panel-muted">هیچ داواکارییەک نییە</p>
         )}
       </div>
